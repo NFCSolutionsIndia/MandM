@@ -1,0 +1,53 @@
+# ─── dependencies ────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ─── build output ────────────────────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ─── turborepo ───────────────────────────────────────────────────────────────
+.turbo/
+
+# ─── secrets ─────────────────────────────────────────────────────────────────
+# .env.example IS committed — it documents the shape. Real values never are.
+.env
+.env.*
+!.env.example
+
+# ─── test and coverage ───────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# ─── native apps ─────────────────────────────────────────────────────────────
+# iOS
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+Pods/
+# Android
+*.iml
+.gradle/
+local.properties
+.cxx/
+captures/
+
+# ─── editors and OS ──────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*

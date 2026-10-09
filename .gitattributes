@@ -1,0 +1,28 @@
+# Normalise line endings in the repository to LF.
+#
+# Without this, a Windows checkout commits CRLF and a Linux CI checkout reads LF,
+# so every file looks changed to the other machine and diffs become unreadable.
+# `text=auto` stores LF in git and converts on checkout per platform.
+* text=auto
+
+# Files that must stay LF even on Windows, because something other than an editor
+# reads them: shell scripts run in containers and CI, and SQL is applied verbatim.
+*.sh      text eol=lf
+*.sql     text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+Dockerfile text eol=lf
+
+# Binary — never convert, never diff as text.
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.webp    binary
+*.pdf     binary
+*.pptx    binary
+*.xlsx    binary
+*.docx    binary
+*.woff    binary
+*.woff2   binary

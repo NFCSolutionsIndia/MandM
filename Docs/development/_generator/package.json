@@ -1,0 +1,6 @@
+{
+  "name": "mm-plan-generator",
+  "private": true,
+  "type": "commonjs",
+  "description": "One-shot bootstrap generator for the development plan. See README.md before running — it OVERWRITES the plan."
+}

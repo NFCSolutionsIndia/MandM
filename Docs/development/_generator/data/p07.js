@@ -1,0 +1,606 @@
+module.exports = {
+  id: 'PHASE-07', name: 'Notifications — Push, Email & The Trigger Matrix', release: 'Release 1',
+  objective: 'Tell the user what matters, rarely, and never miss the one that counts.',
+  business: 'A scheduled-delivery product literally cannot function without notifications — and one that nags gets uninstalled.',
+  technical: 'Web Push with VAPID, device lifecycle, the notification centre, per-channel preferences with quiet hours, and the §14 trigger matrix implemented as job kinds with a volume guardrail.',
+  priority: 'critical', deps: ['PHASE-06'], effort: '~1.5 weeks',
+  outcome: 'Every Release-1 trigger from blueprint §14 fires exactly once through the right channels, email always works as a fallback, and the mean volume stays under two per user per week.',
+  purpose: `Blueprint §14 opens with the governing rule: **"be quiet."** A memory app that nags gets uninstalled, and every unnecessary notification devalues the one that actually matters — the arrival. The target is stated as a number: **fewer than four notifications per user per month outside deliveries.**
+
+Three design decisions from §14.2 shape everything here:
+
+**Email is the guaranteed channel.** Push subscriptions die — a browser reset, a replaced device, and on iOS the requirement that the PWA be installed. Anything the user must not miss goes by email regardless of push state.
+
+**Push is the delight channel.** Timely and dismissible, never the sole carrier of critical information.
+
+**In-app is the complete record.** Everything the product ever sent is in the notification centre, so nothing is lost to a cleared tray.
+
+The most valuable single notification in the product is also identified in §14.1: *"Recipient opened your capsule"* — sent immediately on first open. That is the moment a decades-old promise completes, and it is worth building carefully.`,
+  goals: [
+    'Push works on Android, desktop, and installed iOS PWAs, with email as an unconditional fallback.',
+    'Every §14 Release-1 trigger fires exactly once, through the documented channels.',
+    'Preferences work per type and per channel, with timezone-aware quiet hours.',
+    'Security and billing notifications cannot be suppressed, and say so.',
+    'The mean notification volume per user per week is measured and alerts above two.',
+  ],
+  features: [
+    'Web Push with VAPID and device lifecycle management.',
+    'Service-worker push handler with actions and deep links.',
+    'Contextual permission request at first seal.',
+    'Notification centre with grouping and read state.',
+    'Per-type and per-channel preferences, quiet hours, digest mode.',
+    'Email templates for every trigger, with bounce handling.',
+    'Volume guardrail metric and alert.',
+  ],
+  arch: [
+    'Introduces the `Notification` and `Device` entities and the notification dispatch layer every later feature enqueues into.',
+    'Completes the badging wiring left open in PHASE-06.',
+    'Supplies the transport the PHASE-05 delivery engine and PHASE-03 reminder jobs already enqueue into.',
+  ],
+  depDetail: [
+    '**PHASE-06** install flow must exist, because iOS push requires an installed PWA.',
+    '**PHASE-05** delivery engine and **PHASE-03** reminder jobs already enqueue notifications; this phase delivers them.',
+    '**PHASE-02** onboarding quiz produced the reminder-style mapping constant this phase consumes.',
+  ],
+  deliverables: ['Push infrastructure', 'Notification centre', 'Preferences with quiet hours', 'Email templates for every trigger', 'Volume metric'],
+  ac: [
+    'A capsule delivery notifies the recipient by email unconditionally and by push where subscribed.',
+    'First open notifies the sender immediately.',
+    'Quiet hours defer a non-urgent notification into the user\'s morning.',
+    'Disabling every optional type still delivers security and billing notifications.',
+    'The volume metric is visible and alerts above the threshold.',
+  ],
+  risks: [
+    ['Notification fatigue causing uninstalls', 'high', 'The §14 matrix is implemented exactly, with a hard weekly cap on On This Day and a measured volume metric that alerts above two per user per week.'],
+    ['Push failing silently on iOS, losing the delivery notification', 'critical', 'Email is unconditional for every critical trigger; dead subscriptions are pruned; install is promoted (PHASE-06).'],
+    ['A trigger firing twice', 'high', 'Every enqueue is idempotent by a natural key; the delivery watchdog and On This Day cap already model this pattern.'],
+    ['Private content leaking into a push payload', 'high', 'Payloads carry ids and a short title only; no note text or media. Asserted by test.'],
+  ],
+  gate: 'A stakeholder receives a capsule delivery notification on their own installed phone, and the sender is told when they open it',
+  trace: ['§14', '§9.5', '§29.8', '§29.27'],
+
+  modules: [
+    {
+      id: 'MOD-07-01', name: 'Push Infrastructure & Notification Centre',
+      purpose: 'The transport and the record.',
+      priority: 'critical',
+      objective: 'Deliver notifications reliably across channels and keep a complete in-app record of everything sent.',
+      business: ['The delivery and open notifications are the product\'s emotional payoff and its growth loop.'],
+      functional: ['Subscribe, refresh, and prune push devices', 'Service-worker handler with actions and deep links', 'Contextual permission request', 'Notification centre with grouping', 'Preferences and quiet hours'],
+      ui: ['Notification centre per §29.8', 'Preferences per §29.27', 'Permission primer at first seal'],
+      backend: ['VAPID push send', 'Device lifecycle', 'Notification entity and dispatch layer'],
+      db: ['`devices`, `notifications` with RLS'],
+      security: ['No private content in push payloads', 'Non-suppressible categories enforced server-side'],
+      testing: ['Subscription lifecycle', 'Dead-endpoint pruning', 'Payload content assertion', 'Quiet-hours deferral'],
+      ac: ['Push works on all supported platforms', 'No content in payloads', 'Non-suppressible types cannot be disabled'],
+      trace: ['§9.5', '§14.2', '§29.8'],
+      sprints: [
+        {
+          id: 'SPR-07-01-01', name: 'Push Transport, Notification Centre & Preferences',
+          objective: 'Working notifications with a complete record and real controls.',
+          priority: 'critical', deps: [], duration: '~5 days',
+          goal: 'A notification can be enqueued by any feature and reaches the user through the right channels, is recorded in-app, and respects their preferences.',
+          inScope: ['VAPID and device lifecycle', 'Service-worker handler', 'Permission timing', 'Notification entity and dispatch', 'Centre screen', 'Preferences and quiet hours'],
+          outScope: ['The trigger matrix itself (next module)', 'SMS and WhatsApp (Release 2)'],
+          approach: [
+            'One dispatch function every feature calls; channel selection, preference filtering, and quiet-hours deferral all live inside it, so no feature can accidentally bypass the rules.',
+            'Email is unconditional for critical types regardless of push state (§14.2).',
+          ],
+          archChanges: ['Introduces the dispatch layer that every notification in the product flows through'],
+          deliverables: ['Push infrastructure', 'Dispatch layer', 'Centre', 'Preferences'],
+          testing: ['Lifecycle, pruning, payload, preferences, quiet hours'],
+          ac: ['Dispatch honours preferences and quiet hours', 'Critical types always email'],
+          dod: ['Verified receiving a push on a real installed iOS PWA'],
+          trace: ['§9.5', '§14.2', '§29.8', '§29.27'],
+          epics: [
+            {
+              id: 'EPIC-07-01-01-01', name: 'Web Push Infrastructure & Dispatch Layer',
+              objective: 'Build push subscription, the service-worker handler, and the single dispatch function every feature uses.',
+              value: 'A single dispatch chokepoint is what makes the "be quiet" rule enforceable rather than aspirational.',
+              stories: [['user', 'to know the instant my capsule is opened', 'the promise visibly completes']],
+              functional: ['Subscribe and store devices', 'Prune dead endpoints', 'SW handler with actions and deep links', 'Contextual permission request at first seal', 'Dispatch with channel selection'],
+              technical: ['VAPID keys; encrypted payloads', 'Idempotent enqueue by natural key', 'Email unconditional for critical types'],
+              db: ['`devices`, `notifications` with RLS'],
+              security: ['No note text, media, or address in a push payload'],
+              testing: ['Lifecycle, pruning, payload assertion, dispatch rules'],
+              ac: ['Push received on all platforms', 'Payload carries no content', 'Critical types always email'],
+              trace: ['§9.5', '§14.2'],
+              tasks: [
+                {
+                  name: 'Implement Web Push Subscription, Device Lifecycle and SW Handler', type: 'backend', priority: 'critical',
+                  deps: ['TASK-072', 'TASK-017'], trace: ['§9.5', '§29.0', '§14.2'],
+                  obj: 'Generate VAPID keys, build subscribe/refresh/unsubscribe endpoints, store devices, prune dead endpoints, and handle push in the service worker with actions and deep links.',
+                  ctx: 'Blueprint §9.5: "Web Push with VAPID, subscriptions stored per device, encrypted payloads. Handled in the service worker with actionable buttons and deep links. iOS 16.4+ supports Web Push **only for installed PWAs**."',
+                  why: 'Push subscriptions are fragile — they expire, get revoked, and die when a device is replaced. A subscription table that is never pruned quietly accumulates dead endpoints, wastes send attempts, and makes delivery-rate metrics meaningless. Pruning is what keeps the numbers honest.',
+                  out: 'Working push on Android, desktop, and installed iOS PWAs, with dead subscriptions pruned automatically and a service-worker handler that deep-links correctly.',
+                  fr: [
+                    'Subscribe endpoint storing endpoint, keys, user agent, platform, and whether the client is an installed PWA.',
+                    'Refresh on `pushsubscriptionchange`.',
+                    'Unsubscribe endpoint.',
+                    'Prune endpoints after repeated 404/410 responses.',
+                    'Service-worker `push` handler rendering title, body, icon, and actions.',
+                    '`notificationclick` focusing an existing client or opening the deep link.',
+                  ],
+                  tr: [
+                    'VAPID keys in environment configuration; the private key is a secret.',
+                    'Payloads encrypted by the push library; **the payload carries ids and a short title only** — never note text, media, or an email address.',
+                    'A 404 or 410 from the push service marks the device dead immediately; other failures increment a counter.',
+                    'Installed-PWA detection recorded on the device row, so iOS coverage can be measured.',
+                  ],
+                  impl: [
+                    'Generate VAPID keys and store the private key as a secret; expose the public key to the client.',
+                    'Implement subscribe, refresh, and unsubscribe endpoints writing to the `devices` table with RLS scoped by user.',
+                    'Implement the service-worker `push` handler: parse the payload, show the notification with actions, and handle `notificationclick` by focusing an existing window if one is open (per §9.5) or opening the deep link.',
+                    'Implement pruning: mark dead on 404/410, increment `failure_count` otherwise, and remove after a threshold.',
+                    'Record `is_installed_pwa` so iOS push coverage is measurable — this number matters, because it bounds how many iOS users can receive a push at all.',
+                    '**Write the payload assertion test:** enqueue a notification for a memory with a note, and assert the push payload contains no note text.',
+                    'Verify on a real installed iOS PWA. This is the platform most likely to fail silently.',
+                  ],
+                  archDiagram: `client                          API                       push service
+  subscribe ─────────────────▶ devices row (RLS)
+  pushsubscriptionchange ────▶ refresh
+                               dispatch ──────────────────▶ encrypted payload
+                                 (ids + short title only)        │
+service worker  ◀───────────────────────────────────────── push │
+  ├─ show notification (actions, deep link)
+  └─ notificationclick → focus existing client, else open link
+
+404/410 from push service ──▶ mark device dead, prune`,
+                  files: [
+                    'apps/web/src/app/api/push/subscribe/route.ts',
+                    'apps/web/src/app/api/push/unsubscribe/route.ts',
+                    'apps/web/src/lib/push/send.ts',
+                    'apps/web/src/lib/push/prune.ts',
+                    'apps/web/src/sw/push-handler.ts',
+                    'packages/db/src/schema/notification.ts',
+                    'packages/db/migrations/0013_notifications.sql',
+                    'apps/web/src/lib/push/__tests__/payload.test.ts',
+                  ],
+                  data: `\`devices\` per §10: id, user_id, endpoint, p256dh, auth, user_agent, platform, is_installed_pwa, last_success_at, failure_count, created_at. RLS by user.
+
+\`notifications\` per §10: id, user_id, type, payload (jsonb), deep_link, read_at, created_at, channels_sent (jsonb). RLS by user.
+
+**\`is_installed_pwa\` is a metric, not decoration.** iOS push requires installation, so this column is how push coverage on iOS is measured — and it directly informs how hard install needs to be promoted.
+
+**Payload discipline:** the push payload carries a type, an id, a deep link, and a short human title. It never carries note text, media, or an email address. A push payload passes through a third-party service and is stored in an OS notification tray.`,
+                  rules: [
+                    '**No note text, media, or contact address in a push payload.**',
+                    'A 404 or 410 marks the device dead immediately.',
+                    'Push never carries information that only exists in the push (§14.2) — the in-app record and email carry it.',
+                    '`notificationclick` focuses an existing client rather than opening a duplicate.',
+                  ],
+                  edge: [
+                    'iOS Safari not installed — subscription is impossible; the client must not present the permission prompt at all, and email must cover the user entirely.',
+                    'A subscription expiring silently — pruning on 410 catches it; the user should be re-prompted at a sensible moment rather than silently losing push.',
+                    'A user with five devices — all receive the push; deduplicate at the user level for read state, not at the device level.',
+                    'A push arriving while the app is open — decide whether to show the OS notification or an in-app toast; recommend in-app when focused, and document it.',
+                    '`notificationclick` when the app is open on a different route — focus and navigate, do not open a second window.',
+                    'A payload exceeding the push size limit — truncate the title, never the deep link.',
+                    'A revoked permission — detect and stop attempting, prompting again only in context.',
+                  ],
+                  err: ['A push send failure never blocks the enqueue; the notification is still recorded in-app and emailed where the type requires it.'],
+                  sec: [
+                    'VAPID private key is a secret.',
+                    '**Payload content discipline is a privacy control** — a push payload is visible on a lock screen.',
+                    'Devices are RLS-scoped; a user cannot enumerate another user\'s devices.',
+                  ],
+                  tests: {
+                    unit: ['Dead-endpoint detection on 404 and 410.', '**Payload for a memory with a note contains no note text.**', 'Oversized payload truncates the title, not the link.'],
+                    integration: ['Subscribe, send, receive, and prune lifecycle.', 'Multiple devices all receive; read state is per user.'],
+                    e2e: ['Real installed iOS PWA receives a push.'],
+                  },
+                  ac: [
+                    'Subscribe, refresh, unsubscribe, and prune all working.',
+                    'Service-worker handler shows notifications with actions and deep-links correctly.',
+                    '**Payload assertion test passes — no content in payloads.**',
+                    '`is_installed_pwa` recorded for coverage measurement.',
+                    'Verified on a real installed iOS PWA.',
+                    'Uninstalled iOS never sees a permission prompt.',
+                  ],
+                  notes: ['Record iOS push coverage from `is_installed_pwa` once there is traffic. If it is low, install promotion needs work — and email is carrying the product.'],
+                },
+                {
+                  name: 'Build Notification Dispatch Layer with Preferences and Quiet Hours', type: 'backend', priority: 'critical',
+                  deps: ['TASK-076', 'TASK-029'], trace: ['§14.2', '§14.3', '§29.27'],
+                  obj: 'Build the single dispatch function all features call: channel selection, preference filtering, quiet-hours deferral, non-suppressible enforcement, and the volume metric.',
+                  ctx: 'Blueprint §14.3 specifies per-type and per-channel toggles, timezone-aware quiet hours, digest mode, and that "security and billing emails are not suppressible and this is stated plainly in settings". It also requires the volume metric: "notifications sent per user per week are tracked as a product health metric with an alert if the mean exceeds two."',
+                  why: 'If each feature decides its own channels, the "be quiet" rule erodes one feature at a time and nobody notices until the uninstall rate moves. A single dispatch function makes the rules structural, and the volume metric makes violations visible.',
+                  out: 'One `dispatch()` entry point enforcing every §14 rule, consuming the reminder-style defaults from the PHASE-02 quiz, and emitting the volume metric.',
+                  fr: [
+                    '`dispatch({ userId, type, payload, deepLink })` selecting channels from the type\'s matrix row and the user\'s preferences.',
+                    'Always record the notification in-app.',
+                    'Email unconditionally for critical types regardless of push state.',
+                    'Quiet hours defer non-urgent types to the next allowed window in the user\'s timezone.',
+                    'Non-suppressible types (security, billing, delivery failure) bypass preferences.',
+                    'Digest mode batches eligible types.',
+                    'Idempotent by a natural key so a retry cannot double-send.',
+                    'Emit the per-user weekly volume metric.',
+                  ],
+                  tr: [
+                    'Preference defaults seeded from the reminder-style mapping constant created in PHASE-02.',
+                    'Quiet hours evaluated in the user\'s timezone against database time.',
+                    'The natural key for idempotency is type plus subject id plus period, depending on the type.',
+                    'Non-suppressible types are declared in the type registry, not decided per call.',
+                  ],
+                  impl: [
+                    'Create a type registry in `packages/shared` declaring, per notification type: default channels, whether it is critical (always email), whether it is suppressible, and whether it is quiet-hours-eligible. **This registry is the §14 matrix in code.**',
+                    'Implement `dispatch()` reading the registry and the user\'s preferences. Record in-app always; then select channels.',
+                    'Implement quiet-hours deferral: if the type is eligible and the current local time is outside the window, schedule for the next window rather than dropping.',
+                    'Enforce non-suppressible types by checking the registry, not the preference row.',
+                    'Implement digest batching for eligible types, so "new memory in a shared vault" never sends per item (§14.1 requires digest-only for that type).',
+                    'Implement idempotency by natural key so a worker retry cannot double-send.',
+                    'Seed a new user\'s preferences from the PHASE-02 quiz mapping, completing that contract.',
+                    'Emit the volume metric per user per week and wire the alert above a mean of two.',
+                  ],
+                  files: [
+                    'packages/shared/src/notifications/registry.ts',
+                    'apps/web/src/lib/notifications/dispatch.ts',
+                    'apps/web/src/lib/notifications/quiet-hours.ts',
+                    'apps/web/src/lib/notifications/digest.ts',
+                    'apps/web/src/lib/notifications/__tests__/dispatch.test.ts',
+                  ],
+                  api: {
+                    method: 'internal', path: 'lib/notifications/dispatch.ts',
+                    req: '{\n  "userId": "uuid",\n  "type": "capsule.opened",\n  "payload": { "capsuleId": "uuid", "recipientName": "Ella" },\n  "deepLink": "/app/capsule/uuid"\n}',
+                    res: '{ "ok": true, "data": { "notificationId": "uuid", "channels": ["in_app", "push", "email"] } }',
+                    validation: ['Type exists in the registry', 'User exists and is not deleted', 'Natural key not already dispatched'],
+                    errors: [['409', 'NOTIFICATION_ALREADY_SENT', 'Natural key already dispatched — treated as success'], ['422', 'NOTIFICATION_TYPE_UNKNOWN', 'Type absent from the registry — a programming error']],
+                  },
+                  rules: [
+                    '**Every notification in the product goes through `dispatch()`.** No feature sends directly.',
+                    'The in-app record is always written, so nothing is lost to a cleared tray (§14.2).',
+                    'Critical types always email, regardless of push state.',
+                    'Security and billing types cannot be suppressed, and settings says so.',
+                    'Quiet hours defer, never drop.',
+                    'Digest-only types never send per item.',
+                  ],
+                  edge: [
+                    'A user with quiet hours covering 24 hours — treat as a digest preference rather than silence, or the delivery notification never arrives; decide and document.',
+                    'A critical notification during quiet hours — critical types are not quiet-hours-eligible; verify that capsule delivery is classified correctly.',
+                    'A user in a timezone that changed since their preference was set — evaluate against the current timezone.',
+                    'A retry after a partial send (in-app written, email failed) — the natural key must not block the email retry; track per-channel state.',
+                    'A user who disabled every optional type — security and billing still arrive; assert this.',
+                    'Digest window crossing a DST boundary — absolute instants.',
+                    'A notification for a deleted user — skip cleanly.',
+                    'A type added to the registry without preference defaults — fail at build or test time, not at send time.',
+                  ],
+                  err: ['A channel failure records per-channel state and retries that channel only; it never re-sends the channels that succeeded.'],
+                  sec: ['Non-suppressible enforcement is server-side.', 'The dispatch layer must not log payload content beyond the type and ids.'],
+                  tests: {
+                    unit: [
+                      'Registry drives channel selection.',
+                      'Critical type emails even with push subscribed and preferences off.',
+                      '**Security and billing types cannot be suppressed.**',
+                      'Quiet hours defer an eligible type to the next window.',
+                      'Digest-only type never sends per item.',
+                      'Idempotency by natural key.',
+                      'Per-channel retry does not re-send succeeded channels.',
+                      'A registry type missing defaults fails a test.',
+                    ],
+                    integration: ['New user preferences seeded from the PHASE-02 quiz mapping.', 'Volume metric emitted and the alert threshold configurable.'],
+                  },
+                  ac: [
+                    'Single dispatch entry point; no feature sends directly.',
+                    'Registry encodes the §14 matrix.',
+                    'Critical types always email; non-suppressible types enforced server-side.',
+                    'Quiet hours defer in the user\'s timezone.',
+                    'Digest batching works for eligible types.',
+                    'Idempotent with per-channel retry.',
+                    'Preferences seeded from the quiet/on-point/minimal mapping.',
+                    'Volume metric emitted with an alert above a mean of two per week.',
+                  ],
+                  notes: ['The registry is the §14 matrix made executable. Adding a notification type should require declaring its channels, criticality, and suppressibility — the type system should force that.'],
+                },
+                {
+                  name: 'Build Notification Centre and Preference Screens', type: 'frontend', priority: 'high',
+                  deps: ['TASK-077', 'TASK-014'], trace: ['§29.8', '§29.27', '§14.3'],
+                  obj: 'Build the notification centre with grouping and read state, and the preferences screen with per-type and per-channel toggles and quiet hours.',
+                  ctx: 'Blueprint §29.8 specifies grouping (Today / This Week / Earlier), typed icons, swipe to dismiss, mark-all-read, deep links, and — importantly — that non-suppressible categories "are shown with a lock icon and an explanatory line, rather than a toggle that appears broken".',
+                  why: 'The centre is the complete record, which matters because OS notification trays get cleared and push gets dropped. The preferences screen matters because the honest presentation of non-suppressible types is a small trust signal that costs nothing and is usually got wrong.',
+                  out: 'A notification centre showing everything the product ever sent, and a preferences screen that is honest about what cannot be turned off.',
+                  fr: [
+                    'Centre: grouped Today / This Week / Earlier, typed icons, read state, swipe to dismiss, mark all read, deep links.',
+                    'Unread badge in the app shell and on the installed icon.',
+                    'Preferences: per-type × per-channel matrix, quiet-hours pickers, digest toggle.',
+                    'Non-suppressible types shown with a lock and an explanation, not a broken toggle.',
+                    'Empty state per §29.8.',
+                  ],
+                  tr: [
+                    'Badging wired to the unread count, completing the PHASE-06 handoff.',
+                    'The preference matrix is generated from the notification registry, so a new type appears automatically.',
+                    'Quiet-hours pickers respect the user\'s locale for 12/24-hour display (§33.6).',
+                  ],
+                  impl: [
+                    'Build the centre with the three groups and typed icons. Deep links must land on the right screen — a delivery notification should open the capsule, not Home.',
+                    'Implement read state, swipe-to-dismiss, and mark-all-read.',
+                    'Wire the unread count to the shell badge and to the Badging API, completing PHASE-06.',
+                    '**Generate the preference matrix from the registry** rather than hand-listing types, so adding a type cannot leave the settings screen out of date.',
+                    'Render non-suppressible types with a lock icon and a one-line explanation ("We always email you about security and billing"). Do not render a disabled switch — that reads as a bug.',
+                    'Build quiet-hours time pickers with locale-appropriate formatting and a clear statement of which timezone applies.',
+                    'Implement the digest toggle.',
+                    'Use the §29.8 empty-state copy: "Nothing new — we will tell you when something arrives".',
+                  ],
+                  files: [
+                    'apps/web/src/app/(app)/notifications/page.tsx',
+                    'apps/web/src/app/(app)/settings/notifications/page.tsx',
+                    'apps/web/src/features/notifications/components/NotificationList.tsx',
+                    'apps/web/src/features/notifications/components/PreferenceMatrix.tsx',
+                    'apps/web/src/features/notifications/components/QuietHoursPicker.tsx',
+                    'apps/web/src/features/notifications/__tests__/preferences.test.tsx',
+                  ],
+                  ui: `**Centre** — grouped, typed icons, unread emphasis. Deep-link targets are specific: a delivery opens the capsule; a reaction opens the memory.
+
+**Preferences** — a matrix of type × channel:
+
+${'```'}
+                        in-app   push   email
+Capsule delivered          ✓      [x]    🔒 always
+Someone opened it          ✓      [x]    [x]
+On This Day                ✓      [x]     —
+Security                   ✓       —     🔒 always
+Billing                    ✓       —     🔒 always
+${'```'}
+
+Lock icons carry a one-line explanation, not a disabled switch.
+
+**Quiet hours** — two time pickers with the timezone stated explicitly, because a user who travels will otherwise wonder.
+
+**Empty state** — §29.8 copy verbatim.`,
+                  rules: [
+                    'Non-suppressible types show a lock and an explanation, never a disabled toggle (§29.8).',
+                    'The preference matrix is generated from the registry.',
+                    'Deep links land on the specific object, not a generic screen.',
+                    'The centre is the complete record; nothing is ever removed by the system.',
+                  ],
+                  edge: [
+                    'A notification whose target was deleted — the row remains but the link explains the target is gone rather than 404-ing.',
+                    'Hundreds of notifications — paginate with the grouping preserved.',
+                    'A new notification type shipped without a settings entry — impossible, because the matrix is generated; assert this with a test.',
+                    'Quiet hours spanning midnight — must work; test explicitly.',
+                    'Quiet hours set to a 24-hour span — handle per the TASK-077 decision.',
+                    'A user in a different timezone from when they set quiet hours — the stated timezone must update.',
+                    'Badging unsupported (iOS) — the shell badge still works.',
+                    'Swipe-to-dismiss on desktop — provide a keyboard and mouse equivalent.',
+                  ],
+                  err: ['A failed preference save must revert the toggle visibly; a preference that appears saved but is not is worse than a visible failure.'],
+                  sec: ['Preferences are per user and RLS-scoped.', 'The centre must not render notification payload content as markup.'],
+                  tests: {
+                    component: [
+                      'Grouping renders correctly across the three buckets.',
+                      'Non-suppressible types render a lock and explanation, not a disabled switch.',
+                      '**Matrix is generated from the registry — adding a type to the registry adds a row.**',
+                      'Quiet hours spanning midnight is handled.',
+                      'Deep links target the specific object.',
+                      'Deleted target explains itself.',
+                    ],
+                    e2e: ['Receive a notification, see it in the centre, tap it, land on the capsule, and confirm the unread count clears.'],
+                    a11y: ['axe on both screens; the matrix is a properly labelled group of controls; swipe has a keyboard equivalent.'],
+                  },
+                  ac: [
+                    'Centre implemented per §29.8, all five states, both themes.',
+                    'Unread badge in shell and via Badging API where supported.',
+                    'Preference matrix generated from the registry, proven by test.',
+                    'Non-suppressible types honestly presented.',
+                    'Quiet hours work across midnight with the timezone stated.',
+                    'Deep links specific and correct.',
+                    'axe clean.',
+                  ],
+                  notes: ['Generating the matrix from the registry is what keeps settings and behaviour from drifting as Release 2 adds a dozen types.'],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+
+    {
+      id: 'MOD-07-02', name: 'Trigger Matrix & Email Templates',
+      purpose: 'Implement blueprint §14 exactly, and keep the volume honest.',
+      priority: 'critical',
+      objective: 'Wire every Release-1 trigger to the dispatch layer with the right channels and timing, and prove the volume stays low.',
+      business: ['Every notification either earns its interruption or costs an uninstall.'],
+      functional: ['All §14 Release-1 triggers implemented', 'Email templates for each', 'Bounce and complaint handling', 'Volume guardrail'],
+      backend: ['Job kinds per trigger', 'Templates in `packages/emails`', 'Webhook handling'],
+      security: ['Transactional mail carries no tracking pixel'],
+      testing: ['One test per trigger asserting channels and once-only firing', 'Volume metric accuracy'],
+      ac: ['Every Release-1 trigger fires once with the documented channels', 'Volume metric under the threshold in a simulated month'],
+      trace: ['§14.1', '§14.3', '§14.4'],
+      sprints: [
+        {
+          id: 'SPR-07-02-01', name: 'Trigger Implementation & Volume Guardrail',
+          objective: 'The matrix, honoured exactly.',
+          priority: 'critical', deps: ['SPR-07-01-01'], duration: '~3 days',
+          goal: 'Every trigger in the §14 Release-1 set fires exactly once through its documented channels, and the volume metric proves the product is quiet.',
+          inScope: ['All Release-1 triggers', 'Email templates', 'Bounce handling', 'Volume metric and alert'],
+          outScope: ['Release-2 triggers (shared vaults, broadcasts, recaps)', 'SMS and WhatsApp'],
+          approach: ['Implement the matrix as data-driven job kinds so a trigger cannot exist without a registry entry.'],
+          archChanges: ['Completes the notification surface for Release 1'],
+          deliverables: ['Triggers', 'Templates', 'Volume metric'],
+          testing: ['Per-trigger channel and once-only assertions', 'Simulated month volume'],
+          ac: ['All triggers correct', 'Volume under threshold'],
+          dod: ['A simulated active month produces fewer than four non-delivery notifications'],
+          trace: ['§14.1'],
+          epics: [
+            {
+              id: 'EPIC-07-02-01-01', name: 'Release-1 Trigger Matrix & Email Templates',
+              objective: 'Implement every §14 Release-1 trigger and its email template, and measure the resulting volume.',
+              value: 'Blueprint §14 sets a numeric target for quietness. Implementing the matrix as data and measuring the result is what turns that target into a property of the system.',
+              stories: [
+                ['user', 'to be told when something actually matters', 'I keep the app installed'],
+                ['sender', 'to know the moment my capsule is opened', 'the promise completes'],
+              ],
+              functional: [
+                'Triggers: capsule delivered, capsule opened, reply received, delivery failed, delivering in 7 days, On This Day, upload finished, storage 90%/100%, new-device sign-in, share first viewed, credential change, payment failed.',
+                'Email template per trigger.',
+                'Bounce and complaint handling updating attempt state.',
+                'Volume metric with alert.',
+              ],
+              technical: ['Each trigger is a registry entry plus a call site or job kind', 'Once-only guaranteed by natural key', 'Templates share a minimal, durable base'],
+              security: ['No tracking pixels', 'No content in push payloads'],
+              testing: ['Per-trigger tests', 'Volume simulation', 'Bounce handling'],
+              ac: ['Each trigger fires once with correct channels', 'Volume under four per month excluding deliveries'],
+              trace: ['§14.1', '§14.4'],
+              tasks: [
+                {
+                  name: 'Implement Release-1 Notification Triggers with Once-Only Guarantees', type: 'backend', priority: 'critical',
+                  deps: ['TASK-077'], trace: ['§14.1', '§14.3'],
+                  obj: 'Wire every Release-1 trigger from the §14 matrix to the dispatch layer, with the documented channels and timing and a once-only guarantee for each.',
+                  ctx: 'Blueprint §14.1 gives the full matrix with per-channel columns and exact timing. Several triggers are already enqueued by earlier phases (delivery, open, reply from PHASE-05; On This Day and event reminders from PHASE-03); this task completes the set and verifies each one.',
+                  why: 'The matrix is precise about things that are easy to get wrong: On This Day is capped at once per week, the shared-vault trigger is digest-only, and the "delivering in 7 days" reminder fires exactly once. Each of these, implemented casually, becomes a source of fatigue.',
+                  out: 'Every Release-1 trigger implemented, each with a test asserting its channels and that it fires exactly once.',
+                  fr: [
+                    'Delivery-related: capsule delivered (in-app, push, **email always**), capsule opened, reply received, delivery failed (actionable), delivering in 7 days (once).',
+                    'Discovery: On This Day (once per week maximum, 09:00 local).',
+                    'System: upload finished when backgrounded, storage 90% and 100%, new-device sign-in (non-suppressible), credential change (non-suppressible), payment failed (non-suppressible, then day 3 and day 7).',
+                    'Sharing: share link first viewed only.',
+                  ],
+                  tr: [
+                    'Each trigger has a registry entry; the call site or job kind references it.',
+                    'Natural keys chosen per trigger so retries and restarts cannot double-send: for example capsule id plus type for delivery, user id plus ISO week for On This Day.',
+                    'The 7-day reminder is guarded so an edited unlock date does not fire it twice.',
+                    'Payment-failure dunning uses a schedule, not three separate triggers.',
+                  ],
+                  impl: [
+                    'Add every trigger to the registry with its channels, criticality, and suppressibility from the §14 table. Transcribe rather than interpret.',
+                    'Wire the PHASE-05 delivery engine\'s enqueues to the real dispatch, replacing any interim stub.',
+                    'Implement the 7-day reminder as a job kind derived from `unlock_at`, with a guard so a rescheduled capsule does not re-fire.',
+                    'Verify the On This Day weekly cap end to end, since PHASE-03 built the job and this task supplies the transport.',
+                    'Implement the storage-threshold triggers at 90% and 100%, each once per threshold crossing rather than per upload.',
+                    'Implement the non-suppressible security and billing triggers.',
+                    'Implement the share-first-view trigger, firing on the first view only.',
+                    '**Write one test per trigger** asserting the channel set and that a second invocation does not re-send.',
+                  ],
+                  files: [
+                    'packages/shared/src/notifications/registry.ts  (complete the matrix)',
+                    'apps/workers/src/handlers/capsule-reminder.ts',
+                    'apps/web/src/lib/notifications/triggers/  (call-site helpers)',
+                    'apps/web/src/lib/notifications/__tests__/triggers.test.ts',
+                  ],
+                  rules: [
+                    'Every trigger has a registry entry; none is dispatched ad hoc.',
+                    'On This Day is capped at once per week (§14.1).',
+                    'The 7-day reminder fires exactly once, even if the unlock date is edited.',
+                    'Storage thresholds fire per crossing, not per upload.',
+                    'Security and billing triggers are non-suppressible.',
+                  ],
+                  edge: [
+                    'A capsule rescheduled after its 7-day reminder fired — decide and document whether a new reminder fires for the new date; recommend yes, with the guard keyed on the specific unlock date.',
+                    'A user crossing 90% storage, deleting, and crossing again — fire again, because the situation genuinely recurred.',
+                    'A capsule delivered to five recipients — one sender notification, not five.',
+                    'Several replies in a day — batched, per the PHASE-05 note.',
+                    'A user signing in from a new device repeatedly (private browsing) — decide whether to throttle; a security notification per session would be noise, but suppressing it weakens the control. Document the choice.',
+                    'A payment failure resolved before day 3 — cancel the remaining dunning notifications.',
+                    'A share viewed by the same person twice — first view only.',
+                    'On This Day when the user already opened the app and saw the card — decide whether to suppress the push; recommend yes, and document it.',
+                  ],
+                  err: ['A trigger that fails to dispatch must be retried, and a repeated failure on a critical type must alert.'],
+                  sec: ['Non-suppressible types enforced by the registry.', 'No content in payloads.'],
+                  tests: {
+                    unit: ['**One test per trigger: correct channel set, and a second invocation does not re-send.**'],
+                    integration: [
+                      'Delivery to five recipients produces one sender notification.',
+                      'Rescheduled capsule reminder behaves per the documented decision.',
+                      'Storage threshold re-fires after a genuine re-crossing.',
+                      'Resolved payment cancels remaining dunning.',
+                      'On This Day weekly cap holds across a restart.',
+                    ],
+                  },
+                  ac: [
+                    'Every Release-1 trigger implemented with registry entries transcribed from §14.1.',
+                    'One passing test per trigger for channels and once-only.',
+                    'PHASE-05 and PHASE-03 enqueues now reach real dispatch.',
+                    '7-day reminder guard correct.',
+                    'Storage thresholds per crossing.',
+                    'Non-suppressible types enforced.',
+                    'All documented edge-case decisions recorded in §20.',
+                  ],
+                  notes: ['Transcribe the §14 table; do not improve it while implementing. If a row looks wrong, raise it rather than changing it silently.'],
+                },
+                {
+                  name: 'Build Email Templates for All Triggers with Bounce Handling and Volume Guardrail', type: 'backend', priority: 'high',
+                  deps: ['TASK-079', 'TASK-063'], trace: ['§14.4', '§14.3', 'ADR-016'],
+                  obj: 'Build an email template for every Release-1 trigger on the durable base established in PHASE-05, handle bounces and complaints, and implement the volume guardrail metric and alert.',
+                  ctx: 'PHASE-05 built the decade-durable capsule delivery email. This task extends that base to every other trigger and adds the operational plumbing: `List-Unsubscribe` on non-transactional mail, bounce handling, and the volume metric §14.3 requires.',
+                  why: 'Email is the guaranteed channel, so a broken template silently removes the only reliable path for a critical notification. The volume metric exists because "be quiet" is a claim that decays without measurement — and blueprint §14.3 asks for the alert explicitly.',
+                  out: 'A template per trigger sharing one minimal base, bounce and complaint handling that marks addresses undeliverable, `List-Unsubscribe` where appropriate, and a live volume metric with an alert.',
+                  fr: [
+                    'A template per Release-1 trigger, built on the PHASE-05 durable base.',
+                    '`List-Unsubscribe` headers on non-transactional mail; **not** on delivery mail (§14.4).',
+                    'Bounce and complaint webhooks marking addresses undeliverable and surfacing that on the capsule detail screen.',
+                    'Volume metric: notifications per user per week, with an alert above a mean of two.',
+                    'A simulated-month test asserting fewer than four non-delivery notifications for an active user.',
+                  ],
+                  tr: [
+                    'All templates share the PHASE-05 base: table layout, inline styles, no web fonts, no external CSS, no JavaScript, plain-text alternative.',
+                    'Bounce classification distinguishes hard from soft; a hard bounce marks the address undeliverable immediately.',
+                    'The metric is computed from the notification records, so it cannot drift from what was actually sent.',
+                  ],
+                  impl: [
+                    'Extend the PHASE-05 email base and build a template per trigger. Keep each to one clear message and one action; the durability constraints apply to all of them, not only the delivery mail.',
+                    'Add `List-Unsubscribe` and `List-Unsubscribe-Post` to non-transactional mail. **Do not add it to capsule delivery** — that is transactional and §14.4 says so.',
+                    'Implement bounce and complaint webhook handling: verify the signature, classify hard versus soft, mark the address undeliverable on a hard bounce, and surface it on the capsule detail screen so the sender can fix it.',
+                    'A complaint (spam report) must suppress future non-transactional mail to that address immediately — this protects sending reputation and is a legal courtesy.',
+                    'Implement the volume metric from the notification records, aggregated per user per ISO week, and wire the alert above a mean of two.',
+                    'Write the simulated-month test: an active user creating memories, sealing a capsule, receiving a delivery and a reply — assert the non-delivery notification count stays under four.',
+                    'Verify every template with images disabled and CSS stripped, as PHASE-05 established.',
+                  ],
+                  files: [
+                    'packages/emails/src/templates/  (one per trigger)',
+                    'packages/emails/src/base.tsx',
+                    'apps/web/src/app/api/webhooks/resend/route.ts  (extend)',
+                    'apps/web/src/lib/notifications/volume-metric.ts',
+                    'packages/emails/src/__tests__/all-templates.test.tsx',
+                    'apps/web/src/lib/notifications/__tests__/volume.test.ts',
+                  ],
+                  rules: [
+                    'Every template inherits the durable base — no exceptions for "simple" mail.',
+                    '`List-Unsubscribe` on non-transactional mail only.',
+                    'A hard bounce marks the address undeliverable and surfaces on the capsule detail.',
+                    'A spam complaint suppresses future non-transactional mail to that address.',
+                    'The volume metric is computed from what was actually sent.',
+                  ],
+                  edge: [
+                    'A hard bounce on a capsule recipient address — surfaced on the capsule detail so the sender can fix it before the delivery date; this is one of the most valuable uses of bounce data in the product.',
+                    'A soft bounce (mailbox full) — retried within the PHASE-05 ladder rather than marked undeliverable.',
+                    'A complaint from a capsule recipient — suppress non-transactional mail but consider that the transactional delivery has already happened; document the handling.',
+                    'A user whose own address hard-bounces — they cannot receive security mail; surface this prominently in-app, because it breaks the guaranteed channel.',
+                    'The volume metric skewed by one heavy user — report the mean and a high percentile, since the mean alone hides a fatigue problem affecting a subset.',
+                    'A template rendering failure in production — the durability test in CI is the guard; a failure must alert rather than silently drop mail.',
+                    'Unsubscribe from all non-transactional mail — the user must still receive security and billing; state this on the unsubscribe confirmation.',
+                  ],
+                  err: ['A send failure retries per the ladder; a template render failure alerts, because it means a class of notification is silently broken.'],
+                  sec: ['No tracking pixels (§14.4).', 'Webhook signatures verified with replay protection.', 'Unsubscribe links must not be guessable identifiers that reveal an account.'],
+                  tests: {
+                    component: ['**Every template renders readably with images disabled and CSS stripped.**', 'No external resources or scripts in any template.'],
+                    integration: [
+                      'Hard bounce marks the address undeliverable and appears on the capsule detail.',
+                      'Soft bounce retries rather than marking undeliverable.',
+                      'Complaint suppresses future non-transactional mail.',
+                      '`List-Unsubscribe` present on non-transactional and absent on delivery mail.',
+                      '**Simulated active month produces fewer than four non-delivery notifications.**',
+                      'Volume metric reports mean and a high percentile.',
+                    ],
+                  },
+                  ac: [
+                    'A template per Release-1 trigger, all on the durable base.',
+                    'All templates readable with images disabled and CSS stripped.',
+                    '`List-Unsubscribe` correct per type.',
+                    'Bounce and complaint handling working, with hard bounces surfaced on capsule detail.',
+                    'A user whose own address bounces is warned in-app.',
+                    'Volume metric live with mean and percentile, and an alert above two per week.',
+                    '**Simulated-month test passes under four non-delivery notifications.**',
+                  ],
+                  notes: [
+                    'Surfacing a hard bounce on a capsule recipient before the delivery date is one of the highest-value uses of this data — it turns a future failure into a fixable warning.',
+                    'Report a percentile alongside the mean; a fatigue problem in a subset of users is invisible in an average.',
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
