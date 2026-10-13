@@ -4,7 +4,7 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–8 complete. Step 9 is row-level security; step 10 onward continues the schema.
+**Status:** steps 1–9 complete. Step 10 onward continues the schema, domain by domain.
 
 ---
 
@@ -437,6 +437,184 @@ policies would appear in `\d`, protect nothing, and pass no test.
 
 ---
 
+## 9 · Row-level security
+
+No new tables. The first step that changes who the application *is* when it
+talks to the database.
+
+Every query the API makes carries `WHERE vault_id = …`. That works until one
+handler forgets, and a forgotten `WHERE` in this product is one family reading
+another family's memories. RLS moves the check from "every developer remembers"
+to "the database refuses".
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0002_*.sql
+```
+
+Drizzle contributes six lines and nothing else:
+
+```sql
+ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;   -- ×6
+```
+
+They come from `.enableRLS()` on each table in `src/db/schema`. Declaring it in
+the schema rather than only in SQL keeps the drizzle-kit **snapshot** honest: if
+the snapshot believed RLS was off while the database had it on, a later
+`db:generate` could emit `DISABLE ROW LEVEL SECURITY` and silently open every
+table.
+
+A table with RLS enabled and no policy denies **all** rows to a non-owner role.
+That is the safe direction, which is why enabling comes first.
+
+### The hand-written half
+
+Migration `0002` was appended with four things drizzle-kit cannot model.
+
+**1 · The `mm_app` role.**
+
+```sql
+CREATE ROLE mm_app NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+```
+
+This is the step that is usually skipped, and skipping it makes everything after
+it theatre. **PostgreSQL bypasses RLS for a superuser and for a table's owner.**
+`postgres` is both. Policies enforced against it enforce nothing — they appear in
+`\d`, deny no row, and pass no test.
+
+`NOLOGIN` is deliberate: a password written into a migration is a password in git
+history forever. `LOGIN` and a password are granted per environment.
+
+**2 · The actor.**
+
+```sql
+SET LOCAL app.user_id = '<uuid>';
+```
+
+`SET LOCAL`, never `SET`. The connection pool hands the same physical connection
+to the next request, so a session-level setting would leak one actor's identity
+into another request's query — the exact bug RLS exists to prevent.
+
+`app_current_user()` reads it and returns NULL when unset. NULL is not TRUE, so
+every policy denies by default.
+
+**3 · `SECURITY DEFINER` helpers.** `app_vault_role()`, `app_is_vault_owner()`,
+`app_shares_vault()`.
+
+A policy on `vaults` must ask "is this user a member?", which reads
+`vault_members` — whose own policy asks the same question back. That is infinite
+recursion, and PostgreSQL says so at query time. `SECURITY DEFINER` runs as the
+function owner, which bypasses RLS, cutting the recursion once, in one
+reviewable place. Each helper answers a single question about the *current*
+actor and cannot be asked about anybody else.
+
+**4 · The pre-authentication path.** `app_resolve_session()`,
+`app_resolve_passkey()`.
+
+Authentication must read `sessions` to discover who the actor is — but the
+policy on `sessions` needs an actor already set. Rather than relax that policy,
+the one query that legitimately runs without an actor gets its own narrow
+function: it takes a token hash, returns one uuid, and cannot list anything.
+
+Then fourteen policies. Two worth calling out:
+
+- **`users_insert … WITH CHECK (true)`** — registration happens before an actor
+  exists. The one deliberately permissive policy in the file, and safe because
+  creating a row reveals nothing; reading one is still governed.
+- **no `DELETE` policy on `users`** — so `DELETE` is denied to `mm_app`
+  entirely. Account removal is a soft delete plus a purge job under a different
+  role, never a stray `DELETE` from a request handler.
+
+```bash
+npm run db:migrate
+```
+
+### Prove it
+
+A policy nobody has watched *fail* is a policy nobody knows is there. Seed two
+unrelated families as `postgres`, then act as `mm_app`:
+
+```sql
+BEGIN;
+SET LOCAL ROLE mm_app;
+SELECT count(*) FROM vaults;                 -- 0: no actor set
+ROLLBACK;
+
+BEGIN;
+SET LOCAL ROLE mm_app;
+SET LOCAL app.user_id = '<aarav-uuid>';
+SELECT count(*) FROM vaults;                 -- 1: only Aarav's
+INSERT INTO vaults (id, owner_id, name)
+VALUES (gen_random_uuid(), '<bina-uuid>', 'not mine');
+-- ERROR: new row violates row-level security policy for table "vaults"
+ROLLBACK;
+```
+
+Expected results, and the middle row is the one people assume without checking:
+
+| Actor | Vaults visible |
+|---|---|
+| `postgres` (superuser) | **2** — bypasses RLS, which is why it cannot be the app |
+| `mm_app`, no actor set | **0** — fails closed |
+| `mm_app` as Aarav | **1** |
+
+**Zero rows when the actor is unset is the important one.** A handler that
+forgets `SET LOCAL` returns an empty list — a visible bug in testing — rather
+than every row in the table.
+
+### A denial is not always an error
+
+The single most important thing to know before writing a handler against these
+policies. Measured against `mm_dev`, connected as `mm_app`:
+
+| Attempt | Result |
+|---|---|
+| `INSERT` a vault owned by someone else | `ERROR: new row violates row-level security policy` |
+| `UPDATE` another family's vault | **`UPDATE 0`** — no error |
+| `DELETE FROM users` | **`DELETE 0`** — no error |
+
+A `WITH CHECK` clause **raises**. A `USING` clause **filters** — the rows simply
+are not visible to the statement, so the statement succeeds having changed
+nothing. That is correct PostgreSQL behaviour and it is a trap:
+
+> **Every write handler must treat "0 rows affected" as a refusal**, and answer
+> 403 or 404. A handler that returns 200 because the `UPDATE` did not throw will
+> cheerfully tell a user their change was saved when the database silently
+> discarded it.
+
+Use `RETURNING` on every write and check that a row came back. It is the only
+honest signal.
+
+> **Never edit a migration that has been applied.** drizzle-kit records a hash of
+> each file; changing one — even a comment — makes it look unapplied, and the
+> next `db:migrate` tries to run it again against objects that already exist.
+> Corrections go in a new migration.
+
+> Replaying the migrations against `mm_test` is the cheapest way to check a
+> hand-written migration before it touches `mm_dev`:
+> ```bash
+> docker exec -i mm-postgres psql -U postgres -d mm_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+> docker exec -i mm-postgres psql -U postgres -d mm_test -v ON_ERROR_STOP=1 -q < src/db/migrations/0002_*.sql
+> ```
+
+### Per environment, outside the migration
+
+`mm_app` has no password yet, by design. On a developer machine:
+
+```sql
+ALTER ROLE mm_app WITH LOGIN PASSWORD 'mm_app';
+```
+
+On a server the password comes from AWS Secrets Manager and the role is granted
+`LOGIN` the same way — the migration never learns it.
+
+The application does not use this role yet; `DATABASE_URL` still points at
+`postgres` for migrations and tooling. Splitting it into an app credential and a
+migration credential lands with the first module that opens a connection, so
+that an unused environment variable has no chance to drift.
+
+---
+
 ## Server notes
 
 The steps above describe a **developer machine**. A server differs in three ways:
@@ -461,7 +639,7 @@ The schema is built one domain at a time, in dependency order:
 |---|---|---|
 | 7 | identity | users · sessions · passkey_credentials · devices — **done** |
 | 8 | tenancy | vaults · vault_members — **done** |
-| 9 | *(no tables)* | row-level security — the `mm_app` role and the policies |
+| 9 | *(no tables)* | row-level security — the `mm_app` role and the policies — **done** |
 | 10 | people | members · events · event_members · event_reminders · memory_members |
 | 11 | archive | memories · media_assets · albums · album_memories · upload_sessions |
 | 12 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |

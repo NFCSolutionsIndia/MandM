@@ -117,7 +117,7 @@ export const users = pgTable(
       .where(sql`${t.hardDeleteAfter} IS NOT NULL`),
     check('ck_users_plan', sql.raw(enumCheck('plan', PLAN))),
   ],
-);
+).enableRLS();
 
 /**
  * `sessions` — opaque server-side rows, not JWTs.
@@ -169,7 +169,7 @@ export const sessions = pgTable(
       .on(t.userId, t.expiresAt)
       .where(sql`${t.revokedAt} IS NULL`),
   ],
-);
+).enableRLS();
 
 /**
  * `passkey_credentials` — WebAuthn public keys.
@@ -213,7 +213,7 @@ export const passkeyCredentials = pgTable(
     uniqueIndex('ux_passkey_credential_id').on(t.credentialId),
     index('ix_passkey_user').on(t.userId),
   ],
-);
+).enableRLS();
 
 /**
  * `devices` — APNs and FCM registration tokens.
@@ -275,4 +275,4 @@ export const devices = pgTable(
       sql.raw(enumCheck('platform', DEVICE_PLATFORM)),
     ),
   ],
-);
+).enableRLS();

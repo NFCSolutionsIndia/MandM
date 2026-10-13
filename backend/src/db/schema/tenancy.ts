@@ -101,7 +101,7 @@ export const vaults = pgTable(
       sql.raw(enumCheck('default_visibility', MEMORY_VISIBILITY)),
     ),
   ],
-);
+).enableRLS();
 
 /**
  * `vault_members` — who is in a vault, and what they may do there.
@@ -183,4 +183,4 @@ export const vaultMembers = pgTable(
 
     check('ck_vault_members_role', sql.raw(enumCheck('role', VAULT_ROLE))),
   ],
-);
+).enableRLS();

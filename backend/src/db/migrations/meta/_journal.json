@@ -15,6 +15,13 @@
       "when": 1791887778211,
       "tag": "0001_ancient_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791890441501,
+      "tag": "0002_melted_moira_mactaggert",
+      "breakpoints": true
     }
   ]
 }
