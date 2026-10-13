@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { validateEnv } from './config/env.schema';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
+import { validateEnv } from './config/env.schema.js';
+import { DbModule } from './db/db.module.js';
+import { HealthModule } from './health/health.module.js';
 
 @Module({
   imports: [
@@ -25,6 +27,11 @@ import { validateEnv } from './config/env.schema';
       // the shell or the container runtime; the files only fill the gaps.
       ignoreEnvFile: false,
     }),
+
+    // The connection pool, global so feature modules do not each import it.
+    DbModule,
+
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

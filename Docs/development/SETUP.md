@@ -4,7 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–9 complete. Step 10 onward continues the schema, domain by domain.
+**Status:** steps 1–10 complete. The service runs, connects as `mm_app` and is tested.
+Step 11 onward continues the schema, domain by domain.
 
 ---
 
@@ -615,16 +616,222 @@ that an unused environment variable has no chance to drift.
 
 ---
 
+## 10 · The database module, and a working test suite
+
+The step that connects the application to the database it has been generating
+migrations for. Also the step where the scaffolded test setup turned out never
+to have run, and was replaced.
+
+### Two credentials, not one
+
+```bash
+# backend/.env
+DATABASE_URL=postgres://mm_app:mm_app@127.0.0.1:5432/mm_dev
+MIGRATION_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mm_dev
+```
+
+| Variable | Role | Used by |
+|---|---|---|
+| `DATABASE_URL` | `mm_app` | the running service |
+| `MIGRATION_DATABASE_URL` | `postgres`, the table owner | drizzle-kit only |
+
+`MIGRATION_DATABASE_URL` is **optional** in the environment schema. On a server
+migrations run as a separate task, and an API container has no business holding
+a credential that can `DROP` a table — so a deploy that injects only
+`DATABASE_URL` must still boot.
+
+Pointing `DATABASE_URL` at `postgres` would leave every policy from step 9 in
+place, enforcing nothing, with no error to say so. `/health/ready` reports the
+role for exactly this reason.
+
+### The module
+
+`src/db/db.module.ts` is `@Global` — the database and configuration are the only
+two genuinely cross-cutting concerns in this service.
+
+| Pool setting | Why |
+|---|---|
+| `max` = `DB_POOL_MAX` (10) | What reaches the database is `containers × max`. Ten per process is already 720 across 72 containers, and Aurora has a hard ceiling |
+| `statement_timeout` | Enforced by PostgreSQL, so it survives a client that stops listening. Without it one pathological query holds a connection until the caller gives up — under load, that is how a slow query becomes an outage |
+| `idle_in_transaction_session_timeout` | An abandoned open transaction holds locks and blocks vacuum indefinitely |
+| `application_name` | `pg_stat_activity` otherwise shows a row of indistinguishable `node` |
+| `pool.on('error')` | **Not optional.** Node's default for an unhandled `error` event is to crash the process, and a pool emits one for any connection that dies while idle — a failover, a network blip. Without this listener a routine Aurora failover takes the API down |
+
+`onApplicationShutdown` drains the pool, which requires
+`app.enableShutdownHooks()` in `main.ts`. ECS sends SIGTERM and waits; without
+the hook Nest ignores it and every rolling deploy kills connections
+mid-transaction.
+
+### The actor, and why no handler can forget it
+
+Step 9 made the database refuse rows to anyone it cannot identify. Something has
+to do the identifying, on every transaction, without being passed by hand
+through every service call — because an argument threaded everywhere is an
+argument forgotten exactly once.
+
+`src/db/actor-context.ts` uses Node's `AsyncLocalStorage`: a value set at the
+edge of a request stays visible to every `await` beneath it and is invisible to
+every other request in the process.
+
+> Not a NestJS request-scoped provider: Nest would rebuild the dependency chain
+> of every provider touching it, once per request, on the hottest path in the
+> service — and buy nothing this does not already give.
+
+`DbService.tx()` then opens a transaction and applies it:
+
+```ts
+await tx.execute(sql`SELECT set_config('app.user_id', ${actor ?? ''}, true)`);
+```
+
+**`set_config(..., true)` is the parameterised form of `SET LOCAL`, and the only
+safe one.** `SET LOCAL app.user_id = $1` is not valid SQL — PostgreSQL's `SET`
+takes no bind parameters. The obvious workaround, interpolating the id into the
+statement, turns the actor into an injection point on the one value the entire
+authorization model rests on. `set_config()` is an ordinary function call, so
+the id travels as a parameter and can never be parsed as SQL.
+
+The third argument scopes it to the transaction. A session-level setting would
+outlive the request and be inherited by whoever the pool hands that connection
+to next.
+
+With no actor the setting is empty, `app_current_user()` returns NULL, and every
+policy denies. **Forgetting to authenticate yields an empty list, not the whole
+table.**
+
+### Health
+
+```bash
+curl http://127.0.0.1:3000/health        # liveness, no dependencies touched
+curl http://127.0.0.1:3000/health/ready  # readiness, hits the database
+```
+
+```json
+{"status":"ok","database":{"connected":true,"role":"mm_app","latencyMs":20.85,"rlsEnforced":true}}
+```
+
+`/health` is for "is the process alive"; `/health/ready` is what the load
+balancer should ask, because a container whose database is unreachable must stop
+receiving traffic rather than serve errors from inside the pool.
+
+If `role` ever reads `postgres`, the service is wide open while reporting itself
+perfectly healthy. The startup log carries an ERROR for it too.
+
+### Jest replaced with Vitest
+
+**The scaffolded test setup had never run.** `npm test` failed on a TypeScript
+config error, and `npm run test:e2e` failed on
+`Must use import to load ES Module`.
+
+The cause is structural, not a bad config line: **every dependency this service
+runs on is ESM-only** — NestJS 12, Drizzle, Zod, the Nest CLI. The scaffold
+offered "ESM with Vitest" or "CJS with Jest"; CJS was chosen, and CommonJS Jest
+cannot load an ESM-only framework.
+
+So:
+
+```bash
+npm uninstall jest ts-jest @types/jest ts-node
+npm install -D vitest @vitest/coverage-v8 unplugin-swc @swc/core
+```
+
+- **`unplugin-swc`, not Vitest's default esbuild.** esbuild does not implement
+  `emitDecoratorMetadata`, and NestJS resolves `constructor(private db: DbService)`
+  by reading exactly that metadata. Without SWC, dependency injection fails in
+  tests only, with "Nest can't resolve dependencies".
+- Two configs: `vitest.config.ts` (unit, no Docker needed) and
+  `vitest.config.e2e.ts` (integration, real PostgreSQL, `fileParallelism: false`
+  because the suites share one database).
+
+```bash
+npm test          # unit
+npm run test:e2e  # integration — needs Docker up
+npm run typecheck # tsc --noEmit over src and test
+npm run lint
+```
+
+### The project is now ESM
+
+`package.json` gained `"type": "module"`, which makes TypeScript emit real ESM —
+and **Node ESM requires file extensions on relative imports**:
+
+```ts
+import { DbService } from './db.service.js';      // .js, even from a .ts file
+import * as schema from './schema/index.js';      // directories need /index.js
+```
+
+`.js` and not `.ts` because the extension names the file that will exist *after*
+compilation. Every new file must follow this; the build fails loudly if it does
+not, which is the right failure.
+
+`start:prod` is `node dist/main.js` — extensionless `node dist/main` does not
+resolve under ESM.
+
+### The integration suite
+
+`test/rls.e2e-spec.ts` proves through the application's own code path what step 9
+proved in psql. Both halves can be right while the join between them is wrong: a
+pool that quietly connects as the owner passes every psql check and leaks every
+row.
+
+It runs against **`mm_test`**, applies the real migrations rather than a
+hand-built fixture schema, and refuses to start unless both URLs name `mm_test`
+— it deletes every row.
+
+```bash
+# backend/.env
+TEST_DATABASE_URL=postgres://mm_app:mm_app@127.0.0.1:5432/mm_test
+TEST_MIGRATION_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mm_test
+```
+
+What it asserts:
+
+| | |
+|---|---|
+| connects as `mm_app`, not a superuser | otherwise every other assertion passes for the wrong reason |
+| no actor → **0 rows** | fails closed |
+| as Aarav → **1 row**, his own vault | |
+| asking for another family's vault *by id* → 0 rows | not merely filtered from a list |
+| creating a vault owned by somebody else | rejected, SQLSTATE **42501** |
+| updating another family's vault | **0 rows, no error** — the documented trap |
+| after a transaction, the actor is gone | the next caller of that pooled connection must not inherit it |
+
+> The rejection is asserted on **SQLSTATE `42501`**, not on message text. Drizzle
+> wraps driver errors — its own message is only `Failed query: …` and the
+> PostgreSQL error sits in `cause`. Error strings get reworded between releases;
+> the code is part of the protocol.
+
+---
+
 ## Server notes
 
-The steps above describe a **developer machine**. A server differs in three ways:
+The steps above describe a **developer machine**. A server differs in four ways:
 
-1. **Credentials.** `postgres/postgres` is local-only. A server reads
-   `DATABASE_URL` from the environment, backed by AWS Secrets Manager (ADR-019).
+1. **Credentials.** `postgres/postgres` and `mm_app/mm_app` are local-only. A
+   server reads both URLs from the environment, backed by AWS Secrets Manager
+   (ADR-019), and the API task is given **only `DATABASE_URL`** — the `mm_app`
+   one. A container serving requests must not hold a credential that can `DROP`
+   a table.
 2. **The database.** Production is Aurora PostgreSQL Serverless v2, not this
    container. `docker-compose.yml` is for development and CI only.
-3. **Process management.** `start:dev` is a watcher. A server runs
-   `npm run build` then `node dist/main`, under ECS Fargate.
+3. **Migrations run as their own task**, before the new version starts serving —
+   not from inside the API container, which has no owner credential. `mm_app` is
+   created by migration `0002` with `NOLOGIN`; granting it `LOGIN` and a password
+   is a per-environment step the migration deliberately does not perform.
+4. **Process management.** `start:dev` is a watcher. A server runs
+   `npm run build` then **`node dist/main.js`** — the `.js` matters, since the
+   project is ESM and extensionless paths do not resolve. Under ECS Fargate,
+   SIGTERM reaches `enableShutdownHooks()` and the pool drains.
+
+**Health checks.** Point the load balancer at `/health/ready`, not `/health`.
+The first proves the database is reachable; the second only proves the process
+is alive, which would keep a container in rotation while every request it serves
+fails. `role` in that response must read `mm_app` — `postgres` means row-level
+security is being bypassed.
+
+**CI** runs `npm run typecheck`, `npm run lint`, `npm test`, and
+`npm run test:e2e`. The last needs a PostgreSQL service container and the two
+`TEST_*` URLs; it applies the real migrations and deletes every row, so it must
+never be pointed at anything but a throwaway database.
 
 What transfers unchanged: the Node version, the Fastify adapter, the environment
 schema, and the migration pipeline.
@@ -640,12 +847,13 @@ The schema is built one domain at a time, in dependency order:
 | 7 | identity | users · sessions · passkey_credentials · devices — **done** |
 | 8 | tenancy | vaults · vault_members — **done** |
 | 9 | *(no tables)* | row-level security — the `mm_app` role and the policies — **done** |
-| 10 | people | members · events · event_members · event_reminders · memory_members |
-| 11 | archive | memories · media_assets · albums · album_memories · upload_sessions |
-| 12 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |
-| 13 | sharing | shares · notifications · notification_preferences |
-| 14 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |
-| 15 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |
+| 10 | *(no tables)* | the database module, the actor, and a test suite — **done** |
+| 11 | people | members · events · event_members · event_reminders · memory_members |
+| 12 | archive | memories · media_assets · albums · album_memories · upload_sessions |
+| 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |
+| 14 | sharing | shares · notifications · notification_preferences |
+| 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |
+| 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |
 
 **38 tables for Release 1.** Built in dependency order because foreign keys demand
 it — everything references `users`, and `vault_members` needs `vaults`. One domain

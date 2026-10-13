@@ -22,7 +22,9 @@ export default defineConfig({
   out: './src/db/migrations',
 
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    // The OWNER credential, never the application one: mm_app cannot create
+    // a table, and the credential that can has no business in an API container.
+    url: process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL!,
   },
 
   // TypeScript fields are camelCase; database columns are snake_case. Setting

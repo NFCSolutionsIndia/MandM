@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /**
+     * Tests live in `test/` and import from `src/`, so the compilation root is
+     * the project, not either folder. The build config cannot say that — its
+     * root must be `src/` or `nest build` would emit `dist/src/main.js` and
+     * `node dist/main` would stop working.
+     *
+     * Nothing here is emitted: ts-jest type-checks and transpiles in memory.
+     */
+    "rootDir": ".",
+    "declaration": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

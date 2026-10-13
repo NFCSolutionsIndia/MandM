@@ -11,6 +11,16 @@ import { z } from 'zod';
  * or malformed value stops the process with a readable message instead of
  * surfacing hours later as an unexplained failure inside a request.
  */
+
+/** A PostgreSQL connection string. `.url()` alone would accept `https://…`. */
+const postgresUrl = z
+  .string()
+  .url()
+  .refine(
+    (v) => v.startsWith('postgres://') || v.startsWith('postgresql://'),
+    'must be a postgres:// connection string',
+  );
+
 export const envSchema = z.object({
   /**
    * Narrowed to a union rather than a plain string: `NODE_ENV=prodcution`
@@ -25,18 +35,69 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   /**
-   * Not read by anything yet — declared now so that wiring the database is a
-   * configuration error at boot rather than a runtime error in the first
-   * query. `.url()` alone would accept `https://example.com`, so the protocol
-   * is checked explicitly.
+   * ═══════════════════════════════════════════════════════════════════════
+   *  The APPLICATION credential. This is `mm_app`, never `postgres`.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Row-level security is bypassed for a superuser and for a table's owner.
+   * Pointing this at `postgres` would leave every policy in place, enforcing
+   * nothing, with no error and no test failure to say so — see migration 0002.
+   *
+   * `mm_app` owns no tables and cannot create them, so it also cannot be the
+   * credential a migration runs under.
    */
-  DATABASE_URL: z
-    .string()
-    .url()
-    .refine(
-      (v) => v.startsWith('postgres://') || v.startsWith('postgresql://'),
-      'DATABASE_URL must be a postgres:// connection string',
-    ),
+  DATABASE_URL: postgresUrl,
+
+  /**
+   * The MIGRATION credential — the table owner, used only by drizzle-kit.
+   *
+   * Optional on purpose. Migrations run as a separate task on a server, and
+   * the API container has no business holding a credential that can DROP a
+   * table. A deploy that injects only `DATABASE_URL` must still boot.
+   */
+  MIGRATION_DATABASE_URL: postgresUrl.optional(),
+
+  /**
+   * Connections per process.
+   *
+   * Deliberately small. Each container holds up to this many, and the fleet is
+   * sized in dozens of containers — so the real figure at the database is
+   * `containers × DB_POOL_MAX`, and Aurora enforces a hard ceiling on it. A
+   * pool of 10 per process is already 720 connections across 72 containers.
+   *
+   * More connections do not mean more throughput: past the server's core count
+   * they mean more context switching and worse latency for everyone.
+   */
+  DB_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
+
+  /**
+   * Kill any single statement that runs longer than this.
+   *
+   * Without it, one pathological query holds a connection until the client
+   * gives up — and under load that is how a slow query becomes an outage.
+   * Reports and exports that legitimately take longer get their own role.
+   */
+  DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
+  /**
+   * Kill a transaction left open and idle.
+   *
+   * An abandoned open transaction holds its locks and pins the oldest row
+   * version, which blocks vacuum and bloats the table indefinitely. This is
+   * the backstop for a handler that forgets to commit.
+   */
+  DB_IDLE_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
+  /**
+   * The integration suite's database. Optional — the running service never
+   * reads these, and a production task has no reason to hold them.
+   *
+   * Declared here anyway because this schema is the only inventory of what the
+   * project's environment contains; a variable that lives nowhere is a variable
+   * nobody can audit.
+   */
+  TEST_DATABASE_URL: postgresUrl.optional(),
+  TEST_MIGRATION_DATABASE_URL: postgresUrl.optional(),
 });
 
 /** The validated environment, as a type. Derived — never hand-written. */

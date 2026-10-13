@@ -24,11 +24,11 @@
  */
 
 // Shared column helpers — the rules every table is held to.
-export * from './columns';
+export * from './columns.js';
 
 // ─── Domains ─────────────────────────────────────────────────────────────────
-export * from './identity'; // 07 users · sessions · passkey_credentials · devices
-export * from './tenancy'; // 08 vaults · vault_members
+export * from './identity.js'; // 07 users · sessions · passkey_credentials · devices
+export * from './tenancy.js'; // 08 vaults · vault_members
 // 09 people      members · events · event_members · event_reminders · memory_members
 // 10 archive     memories · media_assets · albums · album_memories · upload_sessions
 // 11 promises    capsules · capsule_recipients · capsule_memories · capsule_replies

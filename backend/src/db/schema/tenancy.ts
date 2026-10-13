@@ -12,7 +12,7 @@ import {
   MEMORY_VISIBILITY,
   VAULT_ROLE,
   VAULT_TYPE,
-} from '../../shared/enums';
+} from '../../shared/enums.js';
 import {
   createdAt,
   enumCheck,
@@ -21,8 +21,8 @@ import {
   utcTimestamp,
   uuidPk,
   uuidRef,
-} from './columns';
-import { users } from './identity';
+} from './columns.js';
+import { users } from './identity.js';
 
 /**
  * Tenancy — the smallest domain in the schema, and the most load-bearing.

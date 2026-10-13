@@ -10,7 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { DEVICE_PLATFORM, PLAN, PUSH_PROVIDER } from '../../shared/enums';
+import { DEVICE_PLATFORM, PLAN, PUSH_PROVIDER } from '../../shared/enums.js';
 import {
   citext,
   createdAt,
@@ -20,7 +20,7 @@ import {
   utcTimestamp,
   uuidPk,
   uuidRef,
-} from './columns';
+} from './columns.js';
 
 /**
  * Identity — who a person is, and how they prove it.
