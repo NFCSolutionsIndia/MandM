@@ -1,0 +1,75 @@
+# Local development infrastructure.
+#
+# Production runs Aurora PostgreSQL Serverless v2 (ADR-005); this file exists so
+# a developer machine matches it closely enough to be trustworthy, and so the
+# database can be destroyed and rebuilt from zero in seconds — which is what
+# makes iterating on a schema cheap.
+#
+#   docker compose up -d        start
+#   docker compose ps           status and health
+#   docker compose logs -f db   follow the log
+#   docker compose down         stop, keep the data
+#   docker compose down -v      stop and DELETE the data (full reset)
+
+services:
+  db:
+    # Pinned to the major version Aurora runs. Never `latest`: a silent major
+    # upgrade between two developers' machines is a debugging session nobody
+    # enjoys. Alpine for a smaller image — no behavioural difference.
+    image: postgres:17-alpine
+    container_name: mm-postgres
+
+    # Comes back after a reboot or a Docker Desktop restart, but not if you
+    # deliberately stopped it. `always` would fight you every time.
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      # Local only. Production credentials live in AWS Secrets Manager, rotated.
+      POSTGRES_PASSWORD: postgres
+      # The image creates this database on first run. mm_test is created by the
+      # init script, because the image only ever makes one.
+      POSTGRES_DB: mm_dev
+      # Collation and encoding for the cluster. Set explicitly rather than
+      # inherited, so every machine sorts text identically — it matters for
+      # Indic names, and a default that differs per host is invisible until it
+      # changes a query result.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=en'
+      LANG: en_US.utf8
+
+    ports:
+      # host:container. The left side is what your machine sees, so if you
+      # already run PostgreSQL on 5432, change ONLY the left number.
+      - '5432:5432'
+
+    volumes:
+      # A NAMED VOLUME, not a bind mount to a host folder.
+      #
+      # A container's own filesystem dies with the container, so without this
+      # every restart would start from an empty database. A named volume is
+      # managed by Docker and survives `down`; it is removed only by `down -v`.
+      #
+      # Named rather than a host path on purpose: PostgreSQL is sensitive to
+      # file permissions and fsync behaviour, and bind mounts on Windows and
+      # macOS get both wrong in ways that are slow at best and corrupting at
+      # worst.
+      - mm-pgdata:/var/lib/postgresql/data
+
+      # Anything in this directory runs ONCE, when the data volume is first
+      # created. It does not run again on restart — only after `down -v`.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      # `docker compose ps` reports healthy only once PostgreSQL is accepting
+      # connections. The container is "running" seconds before that, so without
+      # a healthcheck a migration kicked off too early fails with a confusing
+      # connection error.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d mm_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mm-pgdata:
+    name: mm-pgdata
