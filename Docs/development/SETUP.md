@@ -36,9 +36,10 @@ cd MandM
 
 Two files shape every commit and are worth reading once:
 
-- **`.gitignore`** — ignores `node_modules`, build output, `.env`. Note
-  `!.env.example`: real secrets never land in git, but the *shape* of the
-  configuration does.
+- **`.gitignore`** — ignores `node_modules`, build output, and **every**
+  `.env` file including `.env.example`. Nothing that looks like configuration
+  reaches the repository; the template lives in this document instead, and
+  `src/config/env.schema.ts` is the authoritative list.
 - **`.gitattributes`** — `* text=auto` normalises line endings to LF in the
   repository. Without it a Windows checkout commits CRLF, Linux CI reads LF, and
   every file looks modified to the other machine.
@@ -117,9 +118,12 @@ validation library, not two.
 
 Files:
 
-- **`src/config/env.schema.ts`** — the schema plus `validateEnv()`
-- **`.env`** — real values, gitignored
-- **`.env.example`** — same keys, no secrets, committed
+- **`src/config/env.schema.ts`** — the schema plus `validateEnv()`, committed
+- **`.env`** — real values, never committed
+
+No `.env.example` in the repository. The copyable template is in
+**[Environment reference](#environment-reference)** below, kept beside the
+reasoning for each value rather than as a bare list of keys.
 
 Wired in `app.module.ts`:
 
@@ -127,7 +131,7 @@ Wired in `app.module.ts`:
 ConfigModule.forRoot({
   isGlobal: true,
   validate: validateEnv,
-  envFilePath: ['.env', '.env.example'],
+  envFilePath: '.env',
 })
 ```
 
@@ -626,8 +630,8 @@ to have run, and was replaced.
 
 ```bash
 # backend/.env
-DATABASE_URL=postgres://mm_app:mm_app@127.0.0.1:5432/mm_dev
-MIGRATION_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mm_dev
+DATABASE_URL=postgres://mm_app:CHANGEME@127.0.0.1:5432/mm_dev
+MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_dev
 ```
 
 | Variable | Role | Used by |
@@ -779,8 +783,8 @@ hand-built fixture schema, and refuses to start unless both URLs name `mm_test`
 
 ```bash
 # backend/.env
-TEST_DATABASE_URL=postgres://mm_app:mm_app@127.0.0.1:5432/mm_test
-TEST_MIGRATION_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/mm_test
+TEST_DATABASE_URL=postgres://mm_app:CHANGEME@127.0.0.1:5432/mm_test
+TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 ```
 
 What it asserts:
@@ -799,6 +803,53 @@ What it asserts:
 > wraps driver errors — its own message is only `Failed query: …` and the
 > PostgreSQL error sits in `cause`. Error strings get reworded between releases;
 > the code is part of the protocol.
+
+---
+
+## Environment reference
+
+`backend/.env`, which is **not** in the repository. Copy this, then replace
+every password.
+
+```bash
+NODE_ENV=development
+PORT=3000
+
+# The application role. Row-level security is enforced against this one.
+DATABASE_URL=postgres://mm_app:CHANGEME@127.0.0.1:5432/mm_dev
+
+# The table owner. Used only by drizzle-kit for generate/migrate.
+MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_dev
+
+DB_POOL_MAX=10
+DB_STATEMENT_TIMEOUT_MS=5000
+DB_IDLE_TX_TIMEOUT_MS=10000
+
+# The integration suite. It deletes every row, so it refuses to run against
+# anything whose name is not mm_test.
+TEST_DATABASE_URL=postgres://mm_app:CHANGEME@127.0.0.1:5432/mm_test
+TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
+```
+
+| Variable | Required | Notes |
+|---|---|---|
+| `NODE_ENV` | no | `development` · `test` · `production`. A typo is rejected rather than silently disabling every production guard |
+| `PORT` | no | defaults to 3000 |
+| `DATABASE_URL` | **yes** | **`mm_app`, never `postgres`.** PostgreSQL bypasses RLS for a superuser and for a table's owner, so the wrong role here disables every policy with no error |
+| `MIGRATION_DATABASE_URL` | no | the owner, drizzle-kit only. Omitted on an API task on purpose |
+| `DB_POOL_MAX` | no | 10. What reaches the database is `containers × this` |
+| `DB_STATEMENT_TIMEOUT_MS` | no | 5000, enforced server-side |
+| `DB_IDLE_TX_TIMEOUT_MS` | no | 10000, enforced server-side |
+| `TEST_DATABASE_URL` | tests only | must name `mm_test` |
+| `TEST_MIGRATION_DATABASE_URL` | tests only | must name `mm_test` |
+
+**`src/config/env.schema.ts` is authoritative.** If a variable is not declared
+there, no code may read it — which is what keeps this table from quietly
+becoming a stale guess. A missing or malformed value aborts the boot and names
+every problem at once, rather than surfacing hours later inside a request.
+
+**On a server** none of this is a file. Values come from AWS Secrets Manager and
+the API task is given only `DATABASE_URL`. See [Server notes](#server-notes).
 
 ---
 

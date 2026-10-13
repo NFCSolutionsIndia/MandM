@@ -124,7 +124,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     // this reaches logs and error trackers, and DATABASE_URL holds a password.
     throw new Error(
       `Invalid environment configuration:\n${problems}\n\n` +
-        'See backend/.env.example for the expected shape.',
+        'See Docs/development/SETUP.md for the full template.',
     );
   }
 

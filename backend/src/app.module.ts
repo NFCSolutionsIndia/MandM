@@ -18,10 +18,11 @@ import { HealthModule } from './health/health.module.js';
       // the bootstrap, so a misconfigured deploy never begins serving traffic.
       validate: validateEnv,
 
-      // Later variables win, so a real `.env` overrides the committed example.
-      // Listing the example second means a fresh checkout boots with sensible
-      // defaults instead of failing before the developer has written a .env.
-      envFilePath: ['.env', '.env.example'],
+      // Only `.env`. No .env file of any kind is committed — not even an
+      // example — so there is nothing to fall back to, and that is deliberate:
+      // a fresh checkout should fail loudly with the list of what is missing
+      // rather than boot on someone else's defaults.
+      envFilePath: '.env',
 
       // `process.env` stays the source of truth for values already exported by
       // the shell or the container runtime; the files only fill the gaps.

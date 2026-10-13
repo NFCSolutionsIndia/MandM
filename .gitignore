@@ -13,10 +13,12 @@ out/
 .turbo/
 
 # ─── secrets ─────────────────────────────────────────────────────────────────
-# .env.example IS committed — it documents the shape. Real values never are.
+# NO .env file of any kind is committed, including .env.example.
+# The authoritative list of variables is backend/src/config/env.schema.ts, and
+# Docs/development/SETUP.md carries a copyable template.
 .env
 .env.*
-!.env.example
+*.env
 
 # ─── test and coverage ───────────────────────────────────────────────────────
 coverage/
