@@ -141,7 +141,7 @@ export const sessions = pgTable(
      * SHA-256 of the token, hex — never the token itself. A leaked backup must
      * not hand over working sessions for every account.
      */
-    tokenHash: opaqueToken('token_hash', 64),
+    tokenHash: opaqueToken('token_hash', 64).notNull(),
 
     userAgent: varchar('user_agent', { length: 512 }),
 

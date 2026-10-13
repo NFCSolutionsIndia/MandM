@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
+import { v7 as uuidv7 } from 'uuid';
 import {
   customType,
+  date,
   index,
   timestamp,
   uuid,
@@ -40,7 +42,20 @@ import {
  * on a plane already has its final identity.
  */
 export function uuidPk(name = 'id') {
-  return uuid(name).primaryKey().notNull();
+  return uuid(name)
+    .primaryKey()
+    .notNull()
+    /**
+     * `$defaultFn`, not a database `DEFAULT`.
+     *
+     * The value is generated in this process before the INSERT is sent, which
+     * is what lets a mobile app mint an id offline and send it with the row —
+     * so a memory captured on a plane already has its final identity, and the
+     * retry when the connection returns is idempotent rather than a duplicate.
+     *
+     * It emits no DDL, so adding it changes no migration.
+     */
+    .$defaultFn(() => uuidv7());
 }
 
 /** A reference to another row's id. Nullability is decided per column. */
@@ -108,6 +123,26 @@ export function updatedAt(name = 'updated_at') {
     .$onUpdate(() => new Date());
 }
 
+/**
+ * A calendar date with no time and no zone — a birthday, an anniversary.
+ *
+ * The counterpart to the rule above, and the one exception to it. A birthday
+ * is the 14th of March everywhere on earth: it is not an instant, and storing
+ * it as `timestamptz` would shift it to the 13th for anyone who travels, or
+ * for a server in a different region than the one that wrote it.
+ *
+ * `date` and `timestamptz` are both correct, for different questions. "When
+ * did this happen" is an instant. "Whose birthday is this" is a date on a
+ * calendar. Conflating them is how an app wishes somebody a happy birthday a
+ * day early, every year, for one half of its users.
+ *
+ * Pair with a precision column where the date may be partially known — a
+ * scanned photograph often gives a year and nothing more.
+ */
+export function calendarDate(name: string) {
+  return date(name, { mode: 'string' });
+}
+
 // ─── Tenant scope ────────────────────────────────────────────────────────────
 
 /**
@@ -161,6 +196,20 @@ export function enumCheck(column: string, values: readonly string[]): string {
   return `"${column}" IN (${list})`;
 }
 
+/**
+ * The CHECK for a column holding an ARRAY of enum values.
+ *
+ * `<@` is "is contained by", so the constraint reads: every element of this
+ * array must appear in the allowed set. It also passes for an empty array,
+ * which is correct — "notify me on no channels" is a real choice.
+ */
+export function enumArrayCheck(
+  column: string,
+  values: readonly string[],
+): string {
+  const list = values.map((v) => `'${v}'`).join(', ');
+  return `"${column}" <@ ARRAY[${list}]::text[]`;
+}
 // ─── Tokens ──────────────────────────────────────────────────────────────────
 
 /**
@@ -178,5 +227,7 @@ export function enumCheck(column: string, values: readonly string[]): string {
  * collation here later would quietly collapse the keyspace.
  */
 export function opaqueToken(name: string, length = 64) {
-  return varchar(name, { length }).notNull();
+  // Nullability is the caller’s to decide: a session token is required, an
+  // unsent invitation token is not. `.notNull()` at the call site.
+  return varchar(name, { length });
 }

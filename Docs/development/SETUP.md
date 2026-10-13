@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–10 complete. The service runs, connects as `mm_app` and is tested.
-Step 11 onward continues the schema, domain by domain.
+**Status:** steps 1–11 complete. The service runs, connects as `mm_app`, and 10 of
+38 tables are built and tested. Step 12 onward continues the schema.
 
 ---
 
@@ -806,6 +806,162 @@ What it asserts:
 
 ---
 
+## 11 · The people domain
+
+`members` · `events` · `event_members` · `event_reminders`
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0003_*.sql
+npm run db:migrate
+```
+
+### Owner-scoped, not vault-scoped
+
+The first domain that is **not** reached through a vault, and the reason is a
+privacy one rather than a technical one.
+
+A member is a record *about* a real person — a grandmother, a child, a friend —
+written by somebody else. That person never consented to being in this database.
+So a member row is private to the one account that wrote it: never discoverable,
+never searchable, never joinable across accounts.
+
+> A shared vault lets several people contribute memories to it. It does not let
+> them read each other's address books. Two users in the *same* vault still
+> cannot see each other's members, which is a different boundary from the one
+> `vault_members` enforces — and therefore has its own test.
+
+Policies key on `owner_id`, exactly as `sessions` and `devices` do.
+
+### Recurrence is a rule, not rows
+
+A yearly birthday is **one row**, not fifty. `events.recurrence` plus
+`event_date` is enough to compute any occurrence, and
+`event_reminders.last_fired_for_year` — a single integer — is what stops a
+reminder firing twice.
+
+Materialising occurrences would mean choosing how far ahead to generate, writing
+a backfill job for when that horizon arrives, and rewriting every generated row
+each time somebody corrects a date by one day.
+
+### `date` and `timestamptz` are both right, for different questions
+
+Everything so far has been `timestamptz`, under a rule with no exceptions.
+Birthdays are the exception, and it is not a weakening of the rule:
+
+| Question | Type |
+|---|---|
+| "When did this happen?" | `timestamptz` — an instant |
+| "Whose birthday is this?" | `date` — a day on a calendar |
+
+A birthday is the 14th of March everywhere on earth. Stored as an instant it
+shifts to the 13th for anyone west of the writer — so the app wishes half its
+users a happy birthday a day early, every year. `calendarDate()` in
+`columns.ts` carries that reasoning next to the code.
+
+`birthday_precision` exists for the same reason `occurred_precision` does:
+"March 1962" is a real answer for a grandparent, and the alternative is
+inventing a day nobody can verify and then celebrating it.
+
+### Two columns worth explaining
+
+**`relationship` is deliberately not an enum.** It is the only such column in
+the schema. Family structures do not fit a fixed list, and a user who cannot
+describe a relationship correctly will put the truth in the name field instead,
+which is worse than an unconstrained string.
+
+**`merged_into_id` points the loser at the winner**, rather than deleting it.
+"Mum" and "Amma" turn out to be one person; memories, events and capsules
+already reference the old id and must keep resolving. A CHECK stops a row
+merging into itself, which would make resolution loop forever.
+
+### `channels` is an array, not a comma-separated string
+
+```sql
+"channels" text[] DEFAULT ARRAY['push']::text[] NOT NULL
+CONSTRAINT ck_event_reminders_channels CHECK ("channels" <@ ARRAY['push', 'email']::text[])
+```
+
+A CSV column cannot be constrained or queried: the database could not tell
+`push,email` from `push,emial`, and finding every email reminder would be a
+`LIKE` scan. `<@` is "is contained by", so the constraint reads *every element
+must be a real channel* — and it passes for an empty array, which is a genuine
+choice meaning in-app only.
+
+### Migration 0003, hand-extended
+
+- `set_updated_at` triggers for `members` and `events`
+- `app_owns_event()` and `app_owns_member()` — `SECURITY DEFINER`, for the same
+  recursion reason as the tenancy helpers in `0002`
+- four policies
+
+`event_members` checks **both sides** on write: the event must be yours *and*
+the member must be yours. A member id is unguessable in practice, but "they
+could not have known the id" is not an access control.
+
+### UUIDv7 generation, which was missing
+
+`uuidPk()` declared application-generated ids and nothing generated them. Every
+test to this point had supplied ids by hand, so the gap only appeared the first
+time a row was inserted the way the application will insert one:
+
+```
+null value in column "id" of relation "members" violates not-null constraint
+```
+
+```bash
+npm install uuid
+```
+
+```ts
+.$defaultFn(() => uuidv7())
+```
+
+`$defaultFn`, not a database `DEFAULT` — the value is generated in this process
+*before* the INSERT is sent, which is what lets a mobile app mint an id offline
+and send it with the row. A memory captured on a plane already has its final
+identity, so the retry when the connection returns is idempotent rather than a
+duplicate. It emits no DDL, so it changed no migration.
+
+### Verify
+
+```bash
+npm run test:e2e        # 19 tests across three suites
+```
+
+`test/people.e2e-spec.ts` asserts, among others:
+
+| | |
+|---|---|
+| each owner sees only their own members | the boundary this domain exists for |
+| another owner's member, asked for **by id** | 0 rows — holding an id is not access |
+| creating a member owned by somebody else | `42501` |
+| linking another owner's member to your event | `42501` |
+| a birthday round-trips as `1948-03-14` | no timezone drift |
+| `channels => ARRAY['pigeon']` | `23514` — a CSV column would have accepted it |
+| a second reminder at the same offset | `23505` |
+| merging a member into itself | `23514` |
+| `updated_at` after a **raw SQL** update | the trigger, not the ORM hook |
+
+> **Never replay migrations with `psql` against a database the test suite owns.**
+> Doing so creates the tables without recording them in drizzle's
+> `__drizzle_migrations` ledger, so the next `migrate()` tries to create them
+> again and fails with `relation already exists`. To reset:
+> ```bash
+> docker exec mm-postgres psql -U postgres -d mm_test -c \
+>   "DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;"
+> ```
+
+### Deferred to the archive domain
+
+`memory_members` — who appears in a memory — belongs to this domain by meaning
+but references `memories`, which does not exist yet. It lands in step 12 rather
+than splitting migration 0003 across two tables that cannot both apply.
+
+`members.avatar_media_id` has no foreign key yet, for the same reason.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -899,8 +1055,8 @@ The schema is built one domain at a time, in dependency order:
 | 8 | tenancy | vaults · vault_members — **done** |
 | 9 | *(no tables)* | row-level security — the `mm_app` role and the policies — **done** |
 | 10 | *(no tables)* | the database module, the actor, and a test suite — **done** |
-| 11 | people | members · events · event_members · event_reminders · memory_members |
-| 12 | archive | memories · media_assets · albums · album_memories · upload_sessions |
+| 11 | people | members · events · event_members · event_reminders — **done** |
+| 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members |
 | 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |
 | 14 | sharing | shares · notifications · notification_preferences |
 | 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |

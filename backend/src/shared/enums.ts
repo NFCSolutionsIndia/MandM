@@ -68,6 +68,33 @@ export const MEMORY_VISIBILITY = [
   'recipients',
 ] as const;
 
+/** What kind of occasion an event marks. */
+export const EVENT_TYPE = [
+  'birthday',
+  'anniversary',
+  'festival',
+  'custom',
+] as const;
+
+/**
+ * How an event repeats.
+ *
+ * A rule, not rows. A yearly birthday does NOT materialise fifty future
+ * occurrences — occurrences are computed from `event_date` plus this column, and
+ * `event_reminders.last_fired_for_year` is the one small integer that
+ * replaces a table of stored occurrences.
+ */
+export const RECURRENCE = ['none', 'yearly', 'monthly'] as const;
+
+/**
+ * Where a reminder or notification is delivered.
+ *
+ * `sms` is Release 2 — adding a value to a CHECK constraint is one cheap
+ * migration, which is the reason these are varchar + CHECK rather than native
+ * PostgreSQL enum types.
+ */
+export const NOTIFICATION_CHANNEL = ['push', 'email'] as const;
+
 /** Subscription tiers. */
 export const PLAN = ['free', 'premium', 'family'] as const;
 
@@ -86,6 +113,9 @@ export const unlockKindSchema = z.enum(UNLOCK_KIND);
 export const occurredPrecisionSchema = z.enum(OCCURRED_PRECISION);
 export const mediaKindSchema = z.enum(MEDIA_KIND);
 export const memoryVisibilitySchema = z.enum(MEMORY_VISIBILITY);
+export const eventTypeSchema = z.enum(EVENT_TYPE);
+export const recurrenceSchema = z.enum(RECURRENCE);
+export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNEL);
 export const planSchema = z.enum(PLAN);
 export const pushProviderSchema = z.enum(PUSH_PROVIDER);
 export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
@@ -99,6 +129,9 @@ export type UnlockKind = (typeof UNLOCK_KIND)[number];
 export type OccurredPrecision = (typeof OCCURRED_PRECISION)[number];
 export type MediaKind = (typeof MEDIA_KIND)[number];
 export type MemoryVisibility = (typeof MEMORY_VISIBILITY)[number];
+export type EventType = (typeof EVENT_TYPE)[number];
+export type Recurrence = (typeof RECURRENCE)[number];
+export type NotificationChannel = (typeof NOTIFICATION_CHANNEL)[number];
 export type Plan = (typeof PLAN)[number];
 export type PushProvider = (typeof PUSH_PROVIDER)[number];
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[number];
@@ -118,6 +151,9 @@ export const ENUMS = Object.freeze({
   occurred_precision: OCCURRED_PRECISION,
   media_kind: MEDIA_KIND,
   memory_visibility: MEMORY_VISIBILITY,
+  event_type: EVENT_TYPE,
+  recurrence: RECURRENCE,
+  notification_channel: NOTIFICATION_CHANNEL,
   plan: PLAN,
   push_provider: PUSH_PROVIDER,
   device_platform: DEVICE_PLATFORM,

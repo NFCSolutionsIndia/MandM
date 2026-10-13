@@ -29,11 +29,12 @@ export * from './columns.js';
 // ─── Domains ─────────────────────────────────────────────────────────────────
 export * from './identity.js'; // 07 users · sessions · passkey_credentials · devices
 export * from './tenancy.js'; // 08 vaults · vault_members
-// 09 people      members · events · event_members · event_reminders · memory_members
-// 10 archive     memories · media_assets · albums · album_memories · upload_sessions
-// 11 promises    capsules · capsule_recipients · capsule_memories · capsule_replies
+export * from './people.js'; // 11 members · events · event_members · event_reminders
+// 12 archive     memories · media_assets · albums · album_memories · upload_sessions
+//                memory_members — belongs to people, but references memories
+// 13 promises    capsules · capsule_recipients · capsule_memories · capsule_replies
 //                delivery_attempts · scheduled_jobs
-// 12 sharing     shares · notifications · notification_preferences
-// 13 billing     subscriptions · payments · subscription_channels · subscription_ai_features
-// 14 governance  admin_users · roles · permissions · audit_logs · break_glass_access
+// 14 sharing     shares · notifications · notification_preferences
+// 15 billing     subscriptions · payments · subscription_channels · subscription_ai_features
+// 16 governance  admin_users · roles · permissions · audit_logs · break_glass_access
 //                reports · moderation_flags · blocks · feature_flags
