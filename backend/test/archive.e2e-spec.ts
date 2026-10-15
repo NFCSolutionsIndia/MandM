@@ -1,17 +1,14 @@
-import 'dotenv/config';
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 
-import { DbService, type Db } from '../src/db/db.service.js';
-import * as schema from '../src/db/schema/index.js';
+import type { DbService } from '../src/db/db.service.js';
 import {
   albums,
   mediaAssets,
   memories,
   memoryMembers,
 } from '../src/db/schema/index.js';
+import { connect, disconnect, pgCode, resetDatabase, type Harness } from './support/database.js';
 
 /**
  * The archive — the first vault-scoped domain, and the first use of the role
@@ -35,36 +32,19 @@ const BINA = '01900000-0000-7000-8000-00000000bb01';
 const FAMILY_VAULT = '01900000-0000-7000-8000-0000000aaaa1';
 const BINA_VAULT = '01900000-0000-7000-8000-0000000bbbb1';
 
-function pgCode(error: unknown): string | undefined {
-  return (error as { cause?: { code?: string } }).cause?.code;
-}
-
 describe('archive domain', () => {
+  let harness: Harness;
   let ownerPool: Pool;
-  let appPool: Pool;
-  let db: Db;
   let service: DbService;
 
   let memoryId: string;
 
   beforeAll(async () => {
-    const ownerUrl = process.env.TEST_MIGRATION_DATABASE_URL;
-    const appUrl = process.env.TEST_DATABASE_URL;
-    if (!ownerUrl || !appUrl) throw new Error('TEST_* database URLs must be set');
-    for (const url of [ownerUrl, appUrl]) {
-      if (!url.includes('mm_test')) {
-        throw new Error(`Refusing to run: ${url.split('@')[1]} is not mm_test`);
-      }
-    }
+    harness = await connect();
+    ownerPool = harness.ownerPool;
+    service = harness.service;
 
-    ownerPool = new Pool({ connectionString: ownerUrl });
-    appPool = new Pool({ connectionString: appUrl });
-    await migrate(drizzle(ownerPool), { migrationsFolder: './src/db/migrations' });
-
-    await ownerPool.query('DELETE FROM memories');
-    await ownerPool.query('DELETE FROM members');
-    await ownerPool.query('DELETE FROM vaults');
-    await ownerPool.query('DELETE FROM users');
+    await resetDatabase(ownerPool);
 
     await ownerPool.query(
       `INSERT INTO users (id, email, name) VALUES
@@ -81,9 +61,6 @@ describe('archive domain', () => {
          ($1,$2,'owner'), ($1,$3,'viewer'), ($4,$5,'owner')`,
       [FAMILY_VAULT, AARAV, VIKRAM, BINA_VAULT, BINA],
     );
-
-    db = drizzle(appPool, { schema, casing: 'snake_case' });
-    service = new DbService(db);
 
     const [created] = await service.txAs(AARAV, (tx) =>
       tx
@@ -103,12 +80,8 @@ describe('archive domain', () => {
   }, 60_000);
 
   afterAll(async () => {
-    await ownerPool?.query('DELETE FROM memories');
-    await ownerPool?.query('DELETE FROM members');
-    await ownerPool?.query('DELETE FROM vaults');
-    await ownerPool?.query('DELETE FROM users');
-    await ownerPool?.end();
-    await appPool?.end();
+    await resetDatabase(ownerPool);
+    await disconnect(harness);
   });
 
   it('keeps a memory inside its vault', async () => {

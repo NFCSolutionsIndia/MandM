@@ -1,13 +1,10 @@
-import 'dotenv/config';
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 
 import { ActorContext } from '../src/db/actor-context.js';
-import { DbService, type Db } from '../src/db/db.service.js';
-import * as schema from '../src/db/schema/index.js';
+import type { DbService } from '../src/db/db.service.js';
 import { vaults } from '../src/db/schema/index.js';
+import { connect, disconnect, resetDatabase, type Harness } from './support/database.js';
 
 /**
  * Row-level security, enforced through the application's own code path.
@@ -33,44 +30,19 @@ const AARAV_VAULT = '01900000-0000-7000-8000-0000000aaaa1';
 const BINA_VAULT = '01900000-0000-7000-8000-0000000bbbb1';
 
 describe('row-level security', () => {
+  let harness: Harness;
   let ownerPool: Pool;
-  let appPool: Pool;
-  let db: Db;
   let service: DbService;
 
   beforeAll(async () => {
-    const ownerUrl = process.env.TEST_MIGRATION_DATABASE_URL;
-    const appUrl = process.env.TEST_DATABASE_URL;
-
-    if (!ownerUrl || !appUrl) {
-      throw new Error(
-        'TEST_DATABASE_URL and TEST_MIGRATION_DATABASE_URL must be set — ' +
-          'see backend/.env.example. They must point at mm_test.',
-      );
-    }
-
-    // A crude but load-bearing guard. These tests delete every row, and the
-    // cost of pointing them at the wrong database once is somebody's archive.
-    for (const url of [ownerUrl, appUrl]) {
-      if (!url.includes('mm_test')) {
-        throw new Error(`Refusing to run: ${url.split('@')[1]} is not mm_test`);
-      }
-    }
-
-    ownerPool = new Pool({ connectionString: ownerUrl });
-    appPool = new Pool({ connectionString: appUrl });
-
-    // The same migrations the real database runs — no hand-built fixture
-    // schema, which would drift and start passing tests production fails.
-    await migrate(drizzle(ownerPool), {
-      migrationsFolder: './src/db/migrations',
-    });
+    harness = await connect();
+    ownerPool = harness.ownerPool;
+    service = harness.service;
 
     // Seeded as the OWNER, which bypasses RLS. Seeding through the application
     // role would be a chicken-and-egg: the policies would refuse the very rows
     // the test needs in order to exercise them.
-    await ownerPool.query('DELETE FROM vaults');
-    await ownerPool.query('DELETE FROM users');
+    await resetDatabase(ownerPool);
     await ownerPool.query(
       `INSERT INTO users (id, email, name) VALUES
          ($1, 'a@example.com', 'Aarav'),
@@ -90,15 +62,11 @@ describe('row-level security', () => {
       [AARAV_VAULT, AARAV, BINA_VAULT, BINA],
     );
 
-    db = drizzle(appPool, { schema, casing: 'snake_case' });
-    service = new DbService(db);
   }, 60_000);
 
   afterAll(async () => {
-    await ownerPool?.query('DELETE FROM vaults');
-    await ownerPool?.query('DELETE FROM users');
-    await ownerPool?.end();
-    await appPool?.end();
+    await resetDatabase(ownerPool);
+    await disconnect(harness);
   });
 
   it('connects as mm_app, not as a superuser', async () => {

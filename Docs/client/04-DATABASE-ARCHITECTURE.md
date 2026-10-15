@@ -350,7 +350,7 @@ plural, columns `snake_case`. `CHECK` constraint values are generated from the Z
 ```sql
 CREATE TABLE users (
   id                   uuid    NOT NULL,
-  email                VARCHAR(320)  NOT NULL,
+  email                citext        NOT NULL,   -- case-insensitive
   email_verified_at    timestamptz   NULL,
   phone                VARCHAR(32)   NULL,
   phone_verified_at    timestamptz   NULL,
@@ -359,24 +359,34 @@ CREATE TABLE users (
   locale               VARCHAR(16)   NOT NULL DEFAULT 'en-IN',
   timezone             VARCHAR(64)   NOT NULL DEFAULT 'Asia/Kolkata',
   plan                 VARCHAR(24)   NOT NULL DEFAULT 'free',
-  storage_used_bytes   BIGINT UNSIGNED NOT NULL DEFAULT 0,
-  storage_quota_bytes  BIGINT UNSIGNED NOT NULL,
+  storage_used_bytes   BIGINT NOT NULL DEFAULT 0,
+  storage_quota_bytes  BIGINT NOT NULL,
   created_at           timestamptz   NOT NULL,
   last_seen_at         timestamptz   NULL,
   deleted_at           timestamptz   NULL,
   hard_delete_after    timestamptz   NULL,
 
   PRIMARY KEY (id),
-  CONSTRAINT ck_users_plan CHECK (plan IN ('free','premium','family'))
+  CONSTRAINT ck_users_plan CHECK (plan IN ('free','premium','family')),
+  CONSTRAINT ck_users_storage CHECK (storage_used_bytes  >= 0
+                                 AND storage_quota_bytes >= 0)
 );
 
 CREATE UNIQUE INDEX uq_users_email ON users (email);
 CREATE INDEX ix_users_hard_delete ON users (hard_delete_after);
 ```
 
-`email` is `VARCHAR(320)` — the RFC maximum — and `ICU collation` gives
-case-insensitive uniqueness without PostgreSQL's `citext`. `hard_delete_after` is indexed
+`email` is `citext` — PostgreSQL’s case-insensitive text type, installed as an
+extension by migration 0000 — so `Aarav@x.com` and `aarav@x.com` are one
+account. Without it a user signs up twice, ends up with two archives, and can
+find neither. 320 is the RFC 5321 maximum length. `hard_delete_after` is indexed
 because the retention purge job scans it.
+
+**PostgreSQL has no unsigned integer types.** Where an earlier draft of this
+document wrote `BIGINT UNSIGNED`, the column is a signed `BIGINT` — the same
+range for every value this product stores — and the non-negativity is stated
+explicitly as a `CHECK`. The guarantee is identical, and the intent is visible
+in the schema rather than implied by a type name.
 
 ### 4.2 `vaults` and `vault_members` — the security boundary
 
@@ -472,9 +482,10 @@ Four things to note:
 - **`search_text`** is maintained by the application — title, note, people, place and tags
   concatenated — and carries a `tsvector` GIN index, with `pg_trgm` alongside it for typo tolerance. Standing in for a dedicated search engine at
   Release 1, replaced by OpenSearch at Release 2.
-- **`ix_memories_timeline` leads with `vault_id` then `deleted_at`**, because there are no
-  **partial indexes** (`WHERE deleted_at IS NULL`), so `deleted_at` stays out of the key and
-  the index covers only live rows.
+- **`ix_memories_timeline` is a partial index** — `WHERE deleted_at IS NULL`. PostgreSQL
+  supports these, so `deleted_at` stays out of the index key entirely and the index holds
+  only live rows. On a table that accumulates for decades, that is the difference between an
+  index over every memory ever written and one over the memories a user can actually see.
 
 ### 4.4 `media_assets`
 
@@ -486,10 +497,10 @@ CREATE TABLE media_assets (
   owner_id            uuid    NOT NULL,
   kind                VARCHAR(8)    NOT NULL,
   mime                VARCHAR(128)  NOT NULL,
-  bytes               BIGINT UNSIGNED NOT NULL,
-  width               INT UNSIGNED  NULL,
-  height              INT UNSIGNED  NULL,
-  duration_ms         INT UNSIGNED  NULL,
+  bytes               BIGINT NOT NULL,
+  width               INT  NULL,
+  height              INT  NULL,
+  duration_ms         INT  NULL,
   storage_key         VARCHAR(512)  NOT NULL,
   thumb_key           VARCHAR(512)  NULL,
   preview_key         VARCHAR(512)  NULL,
@@ -509,7 +520,8 @@ CREATE TABLE media_assets (
   CONSTRAINT fk_media_memory FOREIGN KEY (memory_id) REFERENCES memories(id),
   CONSTRAINT ck_media_kind CHECK (kind IN ('image','video','audio')),
   CONSTRAINT ck_media_transcode
-    CHECK (transcode_status IN ('pending','processing','ready','failed','skipped'))
+    CHECK (transcode_status IN ('pending','processing','ready','failed','skipped')),
+  CONSTRAINT ck_media_bytes CHECK (bytes >= 0)
 );
 
 CREATE INDEX ix_media_memory ON media_assets (memory_id, sort_order);
@@ -590,11 +602,11 @@ CREATE TABLE capsule_recipients (
   vault_id           uuid   NOT NULL,
   member_id          uuid   NULL,
   name               VARCHAR(200) NOT NULL,
-  email              VARCHAR(320) NULL,
+  email              citext       NULL,   -- case-insensitive
   phone              VARCHAR(32)  NULL,
   preferred_channel  VARCHAR(16)  NOT NULL DEFAULT 'email',
   access_token_hash  CHAR(64)     NOT NULL,
-  token_version      INT UNSIGNED NOT NULL DEFAULT 1,
+  token_version      INT NOT NULL DEFAULT 1,
   delivered_at       timestamptz  NULL,
   opened_at          timestamptz  NULL,
   last_verified_at   timestamptz  NULL,
@@ -616,7 +628,7 @@ CREATE TABLE delivery_attempts (
   capsule_id          uuid   NOT NULL,
   recipient_id        uuid   NOT NULL,
   channel             VARCHAR(16)  NOT NULL,
-  attempt_no          INT UNSIGNED NOT NULL,
+  attempt_no          INT NOT NULL,
   provider            VARCHAR(32)  NOT NULL,
   provider_message_id VARCHAR(255) NULL,
   status              VARCHAR(16)  NOT NULL,
@@ -661,7 +673,7 @@ CREATE TABLE scheduled_jobs (
   run_at        timestamptz   NOT NULL,   -- ◄── IF THIS IS EVER `TIMESTAMP`,
   payload       JSONB          NOT NULL,   --      EVERY CAPSULE PAST 2038
   state         VARCHAR(16)   NOT NULL DEFAULT 'pending',  --  SILENTLY BREAKS
-  attempts      INT UNSIGNED  NOT NULL DEFAULT 0,
+  attempts      INT  NOT NULL DEFAULT 0,
   locked_by     VARCHAR(64)   NULL,
   locked_until  timestamptz   NULL,
   last_error    TEXT          NULL,
@@ -710,7 +722,7 @@ CREATE TABLE shares (
   password_hash  VARCHAR(255) NULL,
   expires_at     timestamptz  NULL,
   revoked_at     timestamptz  NULL,
-  view_count     INT UNSIGNED NOT NULL DEFAULT 0,
+  view_count     INT NOT NULL DEFAULT 0,
   last_viewed_at timestamptz  NULL,
   created_at     timestamptz  NOT NULL,
 
@@ -780,12 +792,12 @@ CREATE TABLE subscriptions (
   current_period_end            timestamptz  NULL,
   cancel_at                     timestamptz  NULL,
   -- entitlements, denormalised so every check is a single read
-  storage_quota_bytes           BIGINT UNSIGNED NOT NULL,
-  max_pending_capsules          INT UNSIGNED NULL,   -- NULL = unlimited
-  max_capsule_horizon_days      INT UNSIGNED NULL,   -- NULL = unlimited
-  max_video_seconds             INT UNSIGNED NOT NULL,
-  seats                         INT UNSIGNED NOT NULL DEFAULT 1,
-  broadcast_recipients_per_month INT UNSIGNED NOT NULL DEFAULT 0,
+  storage_quota_bytes           BIGINT NOT NULL,
+  max_pending_capsules          INT NULL,   -- NULL = unlimited
+  max_capsule_horizon_days      INT NULL,   -- NULL = unlimited
+  max_video_seconds             INT NOT NULL,
+  seats                         INT NOT NULL DEFAULT 1,
+  broadcast_recipients_per_month INT NOT NULL DEFAULT 0,
   created_at                    timestamptz  NOT NULL,
 
   PRIMARY KEY (id),

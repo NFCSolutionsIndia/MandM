@@ -32,8 +32,8 @@ export * from './tenancy.js'; // 08 vaults · vault_members
 export * from './people.js'; // 11 members · events · event_members · event_reminders
 export * from './archive.js'; // 12 memories · media_assets · upload_sessions
 //                              albums · album_memories · memory_members
-// 13 promises    capsules · capsule_recipients · capsule_memories · capsule_replies
-//                delivery_attempts · scheduled_jobs
+export * from './promises.js'; // 13 capsules · capsule_memories · capsule_recipients
+//                              delivery_attempts · capsule_replies · scheduled_jobs
 // 14 sharing     shares · notifications · notification_preferences
 // 15 billing     subscriptions · payments · subscription_channels · subscription_ai_features
 // 16 governance  admin_users · roles · permissions · audit_logs · break_glass_access

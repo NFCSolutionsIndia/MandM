@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–12 complete. The service runs, connects as `mm_app`, and 16 of
-38 tables are built and tested. Step 13 onward continues the schema.
+**Status:** steps 1–13 complete. The service runs, connects as `mm_app`, and 22 of
+38 tables are built and tested. Step 14 onward continues the schema.
 
 ---
 
@@ -1131,6 +1131,142 @@ write:
 
 ---
 
+## 13 · The promises domain
+
+`capsules` · `capsule_memories` · `capsule_recipients` · `delivery_attempts` ·
+`capsule_replies` · `scheduled_jobs`
+
+Everything up to here is storage. This is the part that has to still work in
+2046.
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0005_*.sql
+npm run db:migrate
+```
+
+### Three constraints, three specific harms
+
+| Constraint | The harm it prevents |
+|---|---|
+| `ux_attempt_idempotent (capsule_id, recipient_id, channel, attempt_no)` | A worker that crashes *after* sending but before recording retries — and hits this key instead of sending again. For a message from a deceased parent, a duplicate is its own kind of harm |
+| `unlock_timezone` | An instant alone cannot express "her birthday morning". Without it, a message scheduled from London for a daughter in Pune arrives at 03:00 |
+| `token_version` | A leaked unlock link is rotated by incrementing an integer. Deleting the recipient row instead would lose the delivery history and the promise with it |
+
+### Sealed means sealed — enforced by a trigger, not by convention
+
+The design notes say this rule is enforced in the application. **It is enforced
+in the database instead**, because "the application remembers" is the kind of
+guarantee that survives exactly until the second code path is written.
+
+`capsule_freeze()` compares the columns that *constitute the promise* —
+`title`, `sender_note`, `unlock_kind`, `unlock_at`, `unlock_timezone`,
+`vault_id`, `owner_id` — and raises if any changed after sealing. It
+deliberately ignores `state`, `delivered_at` and `first_opened_at`: the promise
+is frozen, the machinery of keeping it is not. A freeze that blocked state
+transitions would stop the capsule being delivered at all.
+
+`capsule_contents_freeze()` does the same for `capsule_memories`, because
+removing a memory changes the message as surely as editing the note.
+
+Both honour `editable_until` — a grace window in which the sender may still
+change their mind. After it passes, **nothing** can edit the promise: not the
+owner, not a vault admin, not a stray `UPDATE` in psql.
+
+### The recipient with no account
+
+A capsule is opened by somebody who may never sign up, so the unlock path has
+no actor and cannot be governed by a policy. It gets two narrow
+`SECURITY DEFINER` functions instead:
+
+| | |
+|---|---|
+| `app_resolve_recipient(token_hash)` | Returns the capsule a token opens — and **nothing at all** unless the capsule is already `delivered`, so holding a link early is worth zero |
+| `app_post_reply(token_hash, body, media)` | Writes the reply *and* marks the capsule opened, in one call, so a reply cannot exist against a capsule nobody is recorded as having read. Returns only the new reply's id |
+
+Both take the **hash** of the token. The raw token lives only in the link that
+was emailed.
+
+### The job table is nearly invisible to the API
+
+`scheduled_jobs` has RLS enabled and exactly **one** policy:
+
+```sql
+CREATE POLICY jobs_insert_delivery ON scheduled_jobs FOR INSERT
+  WITH CHECK (kind = 'capsule_delivery' AND state = 'pending');
+```
+
+Insert-only, and only that one kind. The API cannot read the table, cannot move
+a `run_at`, and cannot cancel a delivery — so a compromised request handler
+cannot enumerate who is expecting a capsule or quietly stop one arriving. The
+worker that claims jobs will run under its own role.
+
+The single permitted insert is what makes **"seal the capsule and schedule its
+delivery in one transaction"** possible. A promise and its alarm clock are
+written together, or neither is.
+
+`ix_jobs_claim` is partial — `WHERE state = 'pending'` — so the hottest loop in
+the product reads an index over the few hundred jobs currently due rather than
+every job ever scheduled.
+
+### Only the owner may withdraw a promise
+
+`capsules_update` keys on `owner_id = app_current_user()`, not on the vault
+role. **A vault admin can read a capsule and cannot cancel it.** A promise
+belongs to the person who made it.
+
+There is no DELETE policy at all: a capsule is cancelled, never erased. The
+record that a promise was made and withdrawn is part of what was promised.
+
+### A shared test harness, because the old approach broke
+
+Each suite used to hand-write its own list of `DELETE`s in foreign-key order.
+That works until a new domain references a table an older suite deletes from —
+and then three suites that test nothing to do with the new domain fail in
+their *setup*. It happened the moment `capsule_memories` began referencing
+`memories`.
+
+`test/support/database.ts` now provides `connect()`, `resetDatabase()` and
+`disconnect()`. The reset discovers the tables from `pg_tables` and issues one
+`TRUNCATE ... CASCADE`, so PostgreSQL resolves the order itself — a suite
+written today keeps working when a domain arrives next month. It is also much
+faster, because `TRUNCATE` does not walk the rows.
+
+### Verify
+
+```bash
+npm run test:e2e        # 53 tests across five suites
+```
+
+| | |
+|---|---|
+| an unlock time 18 years out | round-trips to the millisecond — the 2038 problem, asserted rather than assumed |
+| a `datetime` capsule with no unlock time | `23514` — it would never fire |
+| a `milestone` capsule with no member | `23514` |
+| a recipient with no email, phone or member | `23514` — nobody to reach |
+| a vault **admin** cancelling a capsule | **0 rows** — reads it, cannot withdraw it |
+| editing the note after sealing | raises, message contains `sealed` |
+| moving the unlock date after sealing | raises |
+| removing a carried memory after sealing | raises |
+| advancing `state` after sealing | **succeeds** — bookkeeping is not frozen |
+| the same `(capsule, recipient, channel, attempt)` twice | `23505` — cannot double-send |
+| the owner forging a delivery attempt | `42501` — may show status, may not invent it |
+| reading `scheduled_jobs` | 0 rows, while the owner connection sees the row |
+| scheduling a `retention_purge` job | `42501` |
+| resolving a token *before* delivery | nothing |
+| resolving it after, and replying with no account | works, and marks the capsule `opened` |
+| a reply from a token that opens nothing | `42501` |
+| the sender reading the reply | 1 row; a stranger sees 0 |
+
+> **Deleting a memory a sealed capsule carries is stopped twice, at different
+> layers.** Through `mm_app`, RLS gets there first — there is no DELETE policy
+> on `memories`, so the statement matches nothing and the foreign key is never
+> consulted. As the owner, which is how the purge job will connect, the
+> `ON DELETE restrict` is what holds. Both are tested, because they fail
+> differently and only one of them is visible from the API.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -1226,7 +1362,7 @@ The schema is built one domain at a time, in dependency order:
 | 10 | *(no tables)* | the database module, the actor, and a test suite — **done** |
 | 11 | people | members · events · event_members · event_reminders — **done** |
 | 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members — **done** |
-| 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |
+| 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs — **done** |
 | 14 | sharing | shares · notifications · notification_preferences |
 | 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |
 | 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |

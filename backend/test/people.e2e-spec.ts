@@ -1,12 +1,9 @@
-import 'dotenv/config';
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 
-import { DbService, type Db } from '../src/db/db.service.js';
-import * as schema from '../src/db/schema/index.js';
+import type { DbService } from '../src/db/db.service.js';
 import { eventMembers, events, members } from '../src/db/schema/index.js';
+import { connect, disconnect, resetDatabase, type Harness } from './support/database.js';
 
 /**
  * The people domain is owner-scoped, and that is the thing to prove.
@@ -22,9 +19,8 @@ const AARAV = '01900000-0000-7000-8000-00000000aa01';
 const BINA = '01900000-0000-7000-8000-00000000bb01';
 
 describe('people domain', () => {
+  let harness: Harness;
   let ownerPool: Pool;
-  let appPool: Pool;
-  let db: Db;
   let service: DbService;
 
   let aaravMember: string;
@@ -32,36 +28,17 @@ describe('people domain', () => {
   let aaravEvent: string;
 
   beforeAll(async () => {
-    const ownerUrl = process.env.TEST_MIGRATION_DATABASE_URL;
-    const appUrl = process.env.TEST_DATABASE_URL;
+    harness = await connect();
+    ownerPool = harness.ownerPool;
+    service = harness.service;
 
-    if (!ownerUrl || !appUrl) {
-      throw new Error('TEST_DATABASE_URL and TEST_MIGRATION_DATABASE_URL must be set');
-    }
-    for (const url of [ownerUrl, appUrl]) {
-      if (!url.includes('mm_test')) {
-        throw new Error(`Refusing to run: ${url.split('@')[1]} is not mm_test`);
-      }
-    }
-
-    ownerPool = new Pool({ connectionString: ownerUrl });
-    appPool = new Pool({ connectionString: appUrl });
-
-    await migrate(drizzle(ownerPool), { migrationsFolder: './src/db/migrations' });
-
-    await ownerPool.query('DELETE FROM events');
-    await ownerPool.query('DELETE FROM members');
-    await ownerPool.query('DELETE FROM vaults');
-    await ownerPool.query('DELETE FROM users');
+    await resetDatabase(ownerPool);
     await ownerPool.query(
       `INSERT INTO users (id, email, name) VALUES
          ($1, 'a@example.com', 'Aarav'),
          ($2, 'b@example.com', 'Bina')`,
       [AARAV, BINA],
     );
-
-    db = drizzle(appPool, { schema, casing: 'snake_case' });
-    service = new DbService(db);
 
     const mine = await service.txAs(AARAV, (tx) =>
       tx
@@ -95,11 +72,8 @@ describe('people domain', () => {
   }, 60_000);
 
   afterAll(async () => {
-    await ownerPool?.query('DELETE FROM events');
-    await ownerPool?.query('DELETE FROM members');
-    await ownerPool?.query('DELETE FROM users');
-    await ownerPool?.end();
-    await appPool?.end();
+    await resetDatabase(ownerPool);
+    await disconnect(harness);
   });
 
   it('shows each owner only their own members', async () => {

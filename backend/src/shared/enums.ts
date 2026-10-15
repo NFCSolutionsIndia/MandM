@@ -155,6 +155,77 @@ export const RECURRENCE = ['none', 'yearly', 'monthly'] as const;
  */
 export const NOTIFICATION_CHANNEL = ['push', 'email'] as const;
 
+/**
+ * How a capsule reaches somebody.
+ *
+ * A different vocabulary from NOTIFICATION_CHANNEL, and deliberately so. A
+ * reminder is for a user who has the app; a capsule must reach a recipient who
+ * may have no account, no app, and an email address that changed twice since
+ * it was sealed.
+ *
+ * `sms` and `whatsapp` are accepted by the schema although Release 1 delivers
+ * only push and email. A recipient states a preference at seal time, which may
+ * be decades before delivery — recording a preference we cannot yet honour
+ * costs nothing, and discarding it loses information we cannot recover later.
+ */
+export const DELIVERY_CHANNEL = [
+  'push',
+  'email',
+  'sms',
+  'whatsapp',
+] as const;
+
+/**
+ * What happened to one delivery attempt.
+ *
+ * `delivered` is the provider saying it arrived. `acknowledged` is the
+ * recipient proving it: they opened the link. Only the second one closes the
+ * promise, which is why they cannot be the same value.
+ */
+export const DELIVERY_STATUS = [
+  'queued',
+  'sent',
+  'delivered',
+  'bounced',
+  'failed',
+  'acknowledged',
+] as const;
+
+/**
+ * The lifecycle of a background job.
+ *
+ * `dead` is terminal and deliberately separate from `failed`: a failed job will
+ * be retried, a dead one has exhausted its retries and needs a person. For a
+ * capsule delivery, a job reaching `dead` is a Sev-0 page, not a log line.
+ */
+export const JOB_STATE = [
+  'pending',
+  'claimed',
+  'running',
+  'completed',
+  'failed',
+  'dead',
+] as const;
+
+/**
+ * Every kind of work the system schedules.
+ *
+ * Constrained rather than free text, because a typo in a job kind produces a
+ * row that no worker ever claims — and the one that matters here would be a
+ * capsule that silently never arrives.
+ */
+export const JOB_KIND = [
+  'capsule_delivery',
+  'on_this_day',
+  'recap',
+  'reassurance',
+  'contact_refresh',
+  'retention_purge',
+  'integrity_sweep',
+  'export_assembly',
+  'search_index',
+] as const;
+
 /** Subscription tiers. */
 export const PLAN = ['free', 'premium', 'family'] as const;
 
@@ -181,6 +252,10 @@ export const memoryVisibilitySchema = z.enum(MEMORY_VISIBILITY);
 export const eventTypeSchema = z.enum(EVENT_TYPE);
 export const recurrenceSchema = z.enum(RECURRENCE);
 export const notificationChannelSchema = z.enum(NOTIFICATION_CHANNEL);
+export const deliveryChannelSchema = z.enum(DELIVERY_CHANNEL);
+export const deliveryStatusSchema = z.enum(DELIVERY_STATUS);
+export const jobStateSchema = z.enum(JOB_STATE);
+export const jobKindSchema = z.enum(JOB_KIND);
 export const planSchema = z.enum(PLAN);
 export const pushProviderSchema = z.enum(PUSH_PROVIDER);
 export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
@@ -202,6 +277,10 @@ export type MemoryVisibility = (typeof MEMORY_VISIBILITY)[number];
 export type EventType = (typeof EVENT_TYPE)[number];
 export type Recurrence = (typeof RECURRENCE)[number];
 export type NotificationChannel = (typeof NOTIFICATION_CHANNEL)[number];
+export type DeliveryChannel = (typeof DELIVERY_CHANNEL)[number];
+export type DeliveryStatus = (typeof DELIVERY_STATUS)[number];
+export type JobState = (typeof JOB_STATE)[number];
+export type JobKind = (typeof JOB_KIND)[number];
 export type Plan = (typeof PLAN)[number];
 export type PushProvider = (typeof PUSH_PROVIDER)[number];
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[number];
@@ -229,6 +308,10 @@ export const ENUMS = Object.freeze({
   event_type: EVENT_TYPE,
   recurrence: RECURRENCE,
   notification_channel: NOTIFICATION_CHANNEL,
+  delivery_channel: DELIVERY_CHANNEL,
+  delivery_status: DELIVERY_STATUS,
+  job_state: JOB_STATE,
+  job_kind: JOB_KIND,
   plan: PLAN,
   push_provider: PUSH_PROVIDER,
   device_platform: DEVICE_PLATFORM,
