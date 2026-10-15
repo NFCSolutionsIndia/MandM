@@ -4,9 +4,9 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–18 complete. The schema is finished (39 tables, 60 policies),
-the first endpoints work end to end (124 integration tests), and the repository
-now holds both `backend/` and `admin/`.
+**Status:** steps 1–19 complete. The schema is finished (39 tables), the first
+endpoints work end to end, and all three database roles exist — 141 integration
+tests across `backend/` and `admin/`.
 
 ---
 
@@ -1933,6 +1933,153 @@ and tells you which command starts it.
 
 ---
 
+## 19 · The worker and admin roles
+
+Two migrations, no new tables, and the step that turns two earlier claims from
+promises into facts.
+
+```bash
+cd backend
+npm run db:migrate        # 0011 and 0012, both hand-written
+```
+
+### What was missing
+
+| Written in | Claimed | Reality until now |
+|---|---|---|
+| migration 0005 | `scheduled_jobs` is insert-only to the API *because the worker claims under its own role* | No such role. **Nothing could claim a job**, so no capsule would ever have been delivered |
+| migration 0008 | the governance tables are invisible to `mm_app` *because the console connects as its own role* | No such role. They were invisible to everything but the table owner |
+
+Both policies were right. This supplies the half that was missing.
+
+`mm_worker` and `mm_admin` are created `NOLOGIN` with no password, exactly like
+`mm_app` — a password in a migration is a password in git history forever.
+
+```sql
+ALTER ROLE mm_worker WITH LOGIN PASSWORD '<password>';   -- per environment
+ALTER ROLE mm_admin  WITH LOGIN PASSWORD '<password>';
+```
+
+Neither role may `DELETE` **anything, anywhere** — a revoked table privilege,
+which no policy can route around. Deletion here is a soft delete plus a purge
+job, and the purge job is the only thing that will ever get that grant.
+
+### Policies scoped `TO role`
+
+Every policy before this one applies to `PUBLIC`. PostgreSQL ORs permissive
+policies together, so the new roles already carry `mm_app`'s policies — which
+deny them everything, because `app.user_id` is unset. The new policies add
+exactly what each role needs on top.
+
+### The tightest policy in the schema
+
+The worker must read a memory to build the capsule carrying it. It must **not**
+be able to read the archive.
+
+```sql
+CREATE POLICY memories_worker ON memories FOR SELECT TO mm_worker
+  USING (EXISTS (
+    SELECT 1 FROM capsule_memories cm
+    JOIN capsules c ON c.id = cm.capsule_id
+    WHERE cm.memory_id = memories.id
+      AND c.state IN ('sealed', 'delivering', 'delivered')));
+```
+
+A memory nobody sealed is invisible to the delivery engine, and so is one whose
+capsule was cancelled. **A compromised worker cannot walk the archive** — only
+the handful of rows currently in flight. A test asserts it sees one memory and
+not the one beside it, including when asked for by id.
+
+### `read` and `read_content`, made real
+
+Back in step 16 those were two values in an enum. Here is the mechanism:
+
+```sql
+CREATE POLICY memories_admin ON memories FOR SELECT TO mm_admin
+  USING (app_admin_may_read_content(
+    (SELECT v.owner_id FROM vaults v WHERE v.id = memories.vault_id)));
+```
+
+`app_admin_may_read_content()` is true only while a break-glass grant exists
+that names **this** admin, was approved by **somebody else**, and has **not
+expired**.
+
+So support can find an account, read its plan, see when it last signed in — and
+gets zero rows from `memories` until a colleague approves a reason. The tests
+cover all four states: no grant, a live grant, a colleague's grant, and an
+expired one.
+
+`app.admin_id` is a **separate setting** from `app.user_id`. One connection is
+never both, and sharing the key would let an admin session satisfy a user
+policy.
+
+### Two things that cost a round of failures
+
+**1 · A policy belonging to another role is still evaluated for yours.**
+
+Migration 0011 was correct and completely unreachable. Every older policy
+applies to `PUBLIC`, which includes the new roles, and most of them begin by
+calling `app_vault_role()` — on which only `mm_app` had `EXECUTE`. So the new
+roles did not quietly get `false` from a policy that was not theirs; they got
+
+```
+ERROR: permission denied for function app_vault_role
+```
+
+on any query touching `memories`, `albums`, `capsules` and half a dozen other
+tables. Migration 0012 grants the nine helpers.
+
+> **A role needs `EXECUTE` on every function used by any policy on a table it
+> touches — not merely by its own policies.** The next role added will need the
+> same block.
+
+**2 · A role with `INSERT` but no `SELECT` cannot use `RETURNING`.**
+
+`INSERT ... RETURNING` evaluates the **SELECT** policy against the new row and
+raises if it is not visible. The worker may write the audit trail and may not
+read it — so asking for the row back turned a successful insert into
+
+```
+ERROR: new row violates row-level security policy for table "audit_logs"
+```
+
+which reads like the write was refused when it was the read that failed. Worth
+knowing before it is diagnosed at 2am.
+
+### Verify
+
+```bash
+npm run test:e2e        # 141 tests across ten suites
+```
+
+`test/roles.e2e-spec.ts` uses `SET LOCAL ROLE` inside a transaction, which is
+exactly how the real connections behave: `current_user` becomes the role, so it
+is neither superuser nor table owner and every policy applies.
+
+| | |
+|---|---|
+| the worker claims a job | succeeds — **the API sees 0 rows in that table** |
+| the worker reads a memory in a sealed capsule | 1 row |
+| the same worker, the memory beside it | 0 rows, even by id |
+| the worker editing a sealed note | `23514` — the freeze trigger applies to every role |
+| the worker advancing `state` | succeeds |
+| the worker writing a `system` audit row | succeeds |
+| the worker writing an `admin` one | `42501` |
+| the worker reading the audit trail | 0 rows — write-only |
+| any `DELETE` by the worker | `42501`, from a missing privilege rather than a policy |
+| an admin listing accounts | 2 rows |
+| an admin reading content, no grant | **0 rows** |
+| …under a live approved grant | rows |
+| …a colleague's grant | 0 rows |
+| …an expired grant | 0 rows |
+| extending an expiry instead of re-requesting | `42501` |
+| an admin self-approving | `23514` |
+| an admin filing in a colleague's name | `42501` |
+| an admin writing the audit trail | `42501` |
+| `app_current_user()` on an admin connection | NULL |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -2000,9 +2147,10 @@ The steps above describe a **developer machine**. A server differs in four ways:
 2. **The database.** Production is Aurora PostgreSQL Serverless v2, not this
    container. `docker-compose.yml` is for development and CI only.
 3. **Migrations run as their own task**, before the new version starts serving —
-   not from inside the API container, which has no owner credential. `mm_app` is
-   created by migration `0002` with `NOLOGIN`; granting it `LOGIN` and a password
-   is a per-environment step the migration deliberately does not perform.
+   not from inside the API container, which has no owner credential. `mm_app`, `mm_worker` and
+   `mm_admin` are created with `NOLOGIN` by migrations `0002` and `0011`;
+   granting each `LOGIN` and a password is a per-environment step the
+   migrations deliberately do not perform.
 4. **Process management.** `start:dev` is a watcher. A server runs
    `npm run build` then **`node dist/main.js`** — the `.js` matters, since the
    project is ESM and extensionless paths do not resolve. Under ECS Fargate,

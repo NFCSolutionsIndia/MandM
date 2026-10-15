@@ -78,6 +78,20 @@
       "when": 1792057531801,
       "tag": "0010_uuidv7_in_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792074801062,
+      "tag": "0011_worker_and_admin_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792075047995,
+      "tag": "0012_role_function_grants",
+      "breakpoints": true
     }
   ]
 }
