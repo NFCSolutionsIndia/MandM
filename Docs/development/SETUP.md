@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–14 complete. The service runs, connects as `mm_app`, and 25 of
-38 tables are built and tested. Step 15 onward continues the schema.
+**Status:** steps 1–15 complete. The service runs, connects as `mm_app`, and 29 of
+38 tables are built and tested. Step 16 is the last schema step.
 
 ---
 
@@ -1375,6 +1375,118 @@ npm run test:e2e        # 70 tests across six suites
 
 ---
 
+## 15 · The billing domain
+
+`subscriptions` · `subscription_channels` · `subscription_ai_features` ·
+`payments`
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0007_*.sql
+npm run db:migrate
+```
+
+### Commitment 05, as a shape rather than a sentence
+
+> **A promise is never cancelled for non-payment.** If a subscription lapses
+> while capsules are scheduled beyond the free horizon, those capsules are
+> still delivered.
+
+Three things make that true, and none of them is a rule somebody has to
+remember:
+
+1. **Entitlements are columns on the subscription row**, not a lookup against a
+   price book. A lapsed row still says what was granted when the promises were
+   made.
+2. They are evaluated **once, at seal time**, and never re-applied.
+3. **Nothing in the delivery path reads this domain at all.** A worker
+   delivering a capsule in 2046 has no reason to ask whether anybody is still
+   paying, and no code path by which to do so.
+
+The one function that exists is named for its direction:
+
+```sql
+app_sealing_entitlement(user) → (max_pending_capsules, max_capsule_horizon_days, pending_now)
+```
+
+There is **deliberately no** function asking whether an already-sealed capsule
+is still entitled, because such a function is exactly the thing that would
+eventually get called inside the delivery worker — and then a lapsed card would
+cancel a message from somebody's dead father. A test asserts that
+`app_sealing_entitlement` is the only `app_*entitle*` function in the database.
+
+### The whole domain is read-only to the API
+
+There is no INSERT, UPDATE or DELETE policy on any of these four tables. Money
+state is owned by the gateway; these rows are a record of what Stripe and
+Razorpay told us, written by the webhook handler under its own role.
+
+A request handler that could write them could grant itself a plan — and an
+entitlement the user did not pay for is the same bug as a charge they did not
+make, only quieter.
+
+### `(gateway, gateway_ref)` is what makes webhook replay harmless
+
+Payment providers deliver at least once and resend after any ambiguous
+response. Without this unique key, one retried notification is a second row, a
+double-counted payment, and a support ticket about a charge that never
+happened.
+
+The key is the **pair**, not `gateway_ref` alone: Stripe and Razorpay have
+independent id spaces and will eventually produce the same string.
+
+### Money is `bigint` in minor units
+
+Paise and cents, never a float. Money in floating point is how totals end up a
+paisa out with nobody able to say which row is wrong. `bigint` rather than
+`integer` because a JavaScript number loses precision above 2^53 and these get
+summed for reporting.
+
+A refund is **its own row with a negative amount**, so the ledger stays
+append-only and the history reads in order. `CHECK (abs(fee) <= abs(amount))`
+allows the negative fee that comes with it while still rejecting a fee larger
+than the payment it was taken from.
+
+### NULL means unlimited
+
+`max_pending_capsules` and `max_capsule_horizon_days` are NULL for an unlimited
+plan — not `-1`, not `999999`. A sentinel is a number somebody eventually
+compares against, and then "unlimited" quietly becomes a limit.
+
+### What is deliberately absent
+
+There is **no `memories_per_month` column.** That limit does not exist, and a
+column for it would eventually invite somebody to enforce one. A family archive
+that stops accepting memories is not an archive.
+
+The paid gate is `max_capsule_horizon_days` — *how far ahead* you may promise,
+not *how much* you may keep. It is the one limit that does not interfere with
+the loop: it costs nothing until somebody wants the thing the product is
+actually for.
+
+### Verify
+
+```bash
+npm run test:e2e        # 86 tests across seven suites
+```
+
+| | |
+|---|---|
+| a user reading their own subscription | 1 row; a stranger sees 0 |
+| the API granting itself a plan | `42501` |
+| a user upgrading themselves | **0 rows**, plan unchanged |
+| a replayed webhook | `23505` |
+| the same event id on the *other* gateway | accepted |
+| a fee larger than its payment | `23514` |
+| a refund as a negative row | accepted |
+| a user rewriting a receipt | **0 rows** |
+| **a sealed capsule after the subscription expires** | **untouched** — still `sealed`, same unlock time, not cancelled |
+| the lapsed row's entitlements | still recorded |
+| `app_*entitle*` functions in the database | exactly one, and it is the sealing direction |
+| a subscription with zero seats | `23514` |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -1472,7 +1584,7 @@ The schema is built one domain at a time, in dependency order:
 | 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members — **done** |
 | 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs — **done** |
 | 14 | sharing | shares · notifications · notification_preferences — **done** |
-| 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |
+| 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features — **done** |
 | 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |
 
 **38 tables for Release 1.** Built in dependency order because foreign keys demand

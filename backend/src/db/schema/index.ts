@@ -35,6 +35,7 @@ export * from './archive.js'; // 12 memories · media_assets · upload_sessions
 export * from './promises.js'; // 13 capsules · capsule_memories · capsule_recipients
 //                              delivery_attempts · capsule_replies · scheduled_jobs
 export * from './sharing.js'; // 14 shares · notifications · notification_preferences
-// 15 billing     subscriptions · payments · subscription_channels · subscription_ai_features
+export * from './billing.js'; // 15 subscriptions · payments
+//                              subscription_channels · subscription_ai_features
 // 16 governance  admin_users · roles · permissions · audit_logs · break_glass_access
 //                reports · moderation_flags · blocks · feature_flags

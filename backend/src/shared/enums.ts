@@ -277,6 +277,61 @@ export const NON_SUPPRESSIBLE_NOTIFICATIONS = [
   'billing',
 ] as const;
 
+/**
+ * Where a subscription is in its billing life.
+ *
+ * `past_due` and `cancelled` are both states in which the product keeps
+ * every promise already sealed. Billing status gates what a user may create
+ * next; it never reaches backwards into obligations they have already made to
+ * other people.
+ */
+export const SUBSCRIPTION_STATUS = [
+  'trialing',
+  'active',
+  'past_due',
+  'cancelled',
+  'expired',
+] as const;
+
+/** Which processor holds the money. */
+export const PAYMENT_GATEWAY = ['stripe', 'razorpay'] as const;
+
+/** What a payment was for. */
+export const PAYMENT_SUBJECT = [
+  'order',
+  'subscription',
+  'group_gift',
+] as const;
+
+/**
+ * The life of one payment.
+ *
+ * `authorized` and `captured` are separate because they are separate at the
+ * gateway, and collapsing them would make a hold indistinguishable from a
+ * charge — which is the difference between money reserved and money taken.
+ */
+export const PAYMENT_STATUS = [
+  'created',
+  'authorized',
+  'captured',
+  'failed',
+  'refunded',
+  'disputed',
+] as const;
+
+/**
+ * AI features a plan may enable. All Release 2.
+ *
+ * Rows rather than boolean columns, because the set changes and a join table
+ * absorbs a new feature without a migration touching every subscription row.
+ */
+export const AI_FEATURE = [
+  'semantic_search',
+  'transcription',
+  'auto_titles',
+  'face_grouping',
+] as const;
+
 /** Subscription tiers. */
 export const PLAN = ['free', 'premium', 'family'] as const;
 
@@ -310,6 +365,11 @@ export const jobKindSchema = z.enum(JOB_KIND);
 export const shareResourceSchema = z.enum(SHARE_RESOURCE);
 export const sharePermissionSchema = z.enum(SHARE_PERMISSION);
 export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
+export const subscriptionStatusSchema = z.enum(SUBSCRIPTION_STATUS);
+export const paymentGatewaySchema = z.enum(PAYMENT_GATEWAY);
+export const paymentSubjectSchema = z.enum(PAYMENT_SUBJECT);
+export const paymentStatusSchema = z.enum(PAYMENT_STATUS);
+export const aiFeatureSchema = z.enum(AI_FEATURE);
 export const planSchema = z.enum(PLAN);
 export const pushProviderSchema = z.enum(PUSH_PROVIDER);
 export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
@@ -338,6 +398,11 @@ export type JobKind = (typeof JOB_KIND)[number];
 export type ShareResource = (typeof SHARE_RESOURCE)[number];
 export type SharePermission = (typeof SHARE_PERMISSION)[number];
 export type NotificationType = (typeof NOTIFICATION_TYPE)[number];
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUS)[number];
+export type PaymentGateway = (typeof PAYMENT_GATEWAY)[number];
+export type PaymentSubject = (typeof PAYMENT_SUBJECT)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUS)[number];
+export type AiFeature = (typeof AI_FEATURE)[number];
 export type Plan = (typeof PLAN)[number];
 export type PushProvider = (typeof PUSH_PROVIDER)[number];
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[number];
@@ -372,6 +437,11 @@ export const ENUMS = Object.freeze({
   share_resource: SHARE_RESOURCE,
   share_permission: SHARE_PERMISSION,
   notification_type: NOTIFICATION_TYPE,
+  subscription_status: SUBSCRIPTION_STATUS,
+  payment_gateway: PAYMENT_GATEWAY,
+  payment_subject: PAYMENT_SUBJECT,
+  payment_status: PAYMENT_STATUS,
+  ai_feature: AI_FEATURE,
   plan: PLAN,
   push_provider: PUSH_PROVIDER,
   device_platform: DEVICE_PLATFORM,
