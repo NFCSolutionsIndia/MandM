@@ -332,6 +332,91 @@ export const AI_FEATURE = [
   'face_grouping',
 ] as const;
 
+/**
+ * Who performed an audited action.
+ *
+ * `recipient` is its own actor type because somebody opening a capsule has
+ * no account — they are not a `user`, and recording them as `system` would
+ * lose the only trace that a real person read it.
+ */
+export const AUDIT_ACTOR = [
+  'user',
+  'recipient',
+  'system',
+  'admin',
+] as const;
+
+/** The things a report or a moderation flag can be about. */
+export const MODERATION_SUBJECT = [
+  'memory',
+  'media_asset',
+  'capsule',
+  'capsule_reply',
+  'share',
+  'user',
+] as const;
+
+/** Where a moderation flag came from. */
+export const MODERATION_SOURCE = ['auto', 'report'] as const;
+
+/** How urgent a flag is. Drives the SLA, which is a deadline not a hope. */
+export const MODERATION_SEVERITY = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const;
+
+/** Where a report or flag is in review. */
+export const REVIEW_STATE = [
+  'open',
+  'reviewing',
+  'actioned',
+  'dismissed',
+] as const;
+
+/**
+ * Whether a moderation decision is being contested.
+ *
+ * `overturned` exists because a wrong takedown must be correctable. A
+ * moderation system with no appeal state is one that treats its own mistakes
+ * as final, and the material here is irreplaceable.
+ */
+export const APPEAL_STATE = [
+  'none',
+  'requested',
+  'upheld',
+  'overturned',
+] as const;
+
+/** The modules an admin role can be granted access to. */
+export const ADMIN_MODULE = [
+  'users',
+  'vaults',
+  'content',
+  'capsules',
+  'moderation',
+  'billing',
+  'support',
+  'flags',
+  'audit',
+] as const;
+
+/**
+ * What an admin role may do within a module.
+ *
+ * `read_content` is separate from `read` on purpose: listing that a vault
+ * exists and opening what is inside it are different powers, and conflating
+ * them would make every support agent capable of reading family photographs.
+ */
+export const ADMIN_ACTION = [
+  'read',
+  'read_content',
+  'write',
+  'delete',
+  'export',
+] as const;
+
 /** Subscription tiers. */
 export const PLAN = ['free', 'premium', 'family'] as const;
 
@@ -370,6 +455,14 @@ export const paymentGatewaySchema = z.enum(PAYMENT_GATEWAY);
 export const paymentSubjectSchema = z.enum(PAYMENT_SUBJECT);
 export const paymentStatusSchema = z.enum(PAYMENT_STATUS);
 export const aiFeatureSchema = z.enum(AI_FEATURE);
+export const auditActorSchema = z.enum(AUDIT_ACTOR);
+export const moderationSubjectSchema = z.enum(MODERATION_SUBJECT);
+export const moderationSourceSchema = z.enum(MODERATION_SOURCE);
+export const moderationSeveritySchema = z.enum(MODERATION_SEVERITY);
+export const reviewStateSchema = z.enum(REVIEW_STATE);
+export const appealStateSchema = z.enum(APPEAL_STATE);
+export const adminModuleSchema = z.enum(ADMIN_MODULE);
+export const adminActionSchema = z.enum(ADMIN_ACTION);
 export const planSchema = z.enum(PLAN);
 export const pushProviderSchema = z.enum(PUSH_PROVIDER);
 export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
@@ -403,6 +496,14 @@ export type PaymentGateway = (typeof PAYMENT_GATEWAY)[number];
 export type PaymentSubject = (typeof PAYMENT_SUBJECT)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUS)[number];
 export type AiFeature = (typeof AI_FEATURE)[number];
+export type AuditActor = (typeof AUDIT_ACTOR)[number];
+export type ModerationSubject = (typeof MODERATION_SUBJECT)[number];
+export type ModerationSource = (typeof MODERATION_SOURCE)[number];
+export type ModerationSeverity = (typeof MODERATION_SEVERITY)[number];
+export type ReviewState = (typeof REVIEW_STATE)[number];
+export type AppealState = (typeof APPEAL_STATE)[number];
+export type AdminModule = (typeof ADMIN_MODULE)[number];
+export type AdminAction = (typeof ADMIN_ACTION)[number];
 export type Plan = (typeof PLAN)[number];
 export type PushProvider = (typeof PUSH_PROVIDER)[number];
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[number];
@@ -442,6 +543,14 @@ export const ENUMS = Object.freeze({
   payment_subject: PAYMENT_SUBJECT,
   payment_status: PAYMENT_STATUS,
   ai_feature: AI_FEATURE,
+  audit_actor: AUDIT_ACTOR,
+  moderation_subject: MODERATION_SUBJECT,
+  moderation_source: MODERATION_SOURCE,
+  moderation_severity: MODERATION_SEVERITY,
+  review_state: REVIEW_STATE,
+  appeal_state: APPEAL_STATE,
+  admin_module: ADMIN_MODULE,
+  admin_action: ADMIN_ACTION,
   plan: PLAN,
   push_provider: PUSH_PROVIDER,
   device_platform: DEVICE_PLATFORM,

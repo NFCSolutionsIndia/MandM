@@ -37,5 +37,6 @@ export * from './promises.js'; // 13 capsules · capsule_memories · capsule_rec
 export * from './sharing.js'; // 14 shares · notifications · notification_preferences
 export * from './billing.js'; // 15 subscriptions · payments
 //                              subscription_channels · subscription_ai_features
-// 16 governance  admin_users · roles · permissions · audit_logs · break_glass_access
-//                reports · moderation_flags · blocks · feature_flags
+export * from './governance.js'; // 16 admin_users · roles · permissions
+//                                audit_logs · break_glass_access · reports
+//                                moderation_flags · blocks · feature_flags

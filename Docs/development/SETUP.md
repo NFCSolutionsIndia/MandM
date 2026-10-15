@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–15 complete. The service runs, connects as `mm_app`, and 29 of
-38 tables are built and tested. Step 16 is the last schema step.
+**Status:** steps 1–16 complete. **The Release 1 schema is finished** — all 38
+tables, 60 policies and 106 integration tests. What follows is API work.
 
 ---
 
@@ -1487,6 +1487,170 @@ npm run test:e2e        # 86 tests across seven suites
 
 ---
 
+## 16 · The governance domain
+
+`roles` · `permissions` · `admin_users` · `audit_logs` · `break_glass_access` ·
+`reports` · `moderation_flags` · `blocks` · `feature_flags`
+
+Nine tables, the last of the 38, and a different security model from every
+other domain.
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0008_*.sql
+npm run db:migrate
+```
+
+Everywhere else the question is *"may this user see this row"*. Here it becomes
+**"which employee read a family's private archive, and why"** — a question
+about us, answerable only if the answer is recorded as it happens, and
+trustworthy only if the record cannot be edited afterwards.
+
+### Most of this domain is invisible to the API
+
+`roles`, `permissions`, `admin_users` and `moderation_flags` have RLS enabled
+and **no policy at all**, which denies them to `mm_app` entirely. The admin
+console connects as its own role, which is a later step.
+
+Only four things are genuinely user-facing and get policies: a user's own
+**audit log**, the **break-glass records about them**, their own **reports**,
+and their **blocks**.
+
+### Append-only means append-only, including for us
+
+The absence of an UPDATE policy stops `mm_app`. It does not stop the table
+owner, a migration, or anybody with a psql prompt — and **an audit trail that
+privileged code can quietly rewrite is not an audit trail**.
+
+`audit_append_only()` is a trigger that refuses UPDATE and DELETE regardless of
+who is asking. A test proves it by trying as the **table owner** and getting
+`42501`.
+
+`break_glass_immutable()` does the same for access grants, with one exception:
+`user_notified_at` may be filled in later, because that is the one field which
+legitimately becomes true after the fact. Every other column, and deletion, is
+refused.
+
+> **The limit of this guarantee: `TRUNCATE` does not fire row-level triggers.**
+> It requires table-owner privilege — and anyone with that could also
+> `DISABLE TRIGGER` — so the guard is against accident and against a
+> compromised application role, not against a determined owner. Durable audit
+> integrity needs the log shipped off-box as well, which is an operations
+> concern rather than a schema one.
+>
+> It is also why the test harness works: `resetDatabase()` uses `TRUNCATE`, so
+> it is not blocked by these triggers.
+
+### `user_notified_at` is what makes break-glass honest
+
+Support sometimes genuinely needs to see what a user sees. The alternative to
+designing for that is an undocumented path nobody logs.
+
+A grant records the admin, the target, the **reason**, the **approver**, an
+**expiry** — and whether the user was told. Two constraints make it real:
+
+| | |
+|---|---|
+| `CHECK (approved_by <> admin_id)` | An approval you can grant yourself is a field, not a control |
+| `CHECK (length(reason) >= 20)` | "support" is not a reason |
+
+The subject of the access can read the record of it. Being told is the point;
+being able to check afterwards is what makes being told credible.
+
+### The API may record its own trail and cannot forge anyone else's
+
+```sql
+CREATE POLICY audit_write_own ON audit_logs FOR INSERT
+  WITH CHECK (actor_type = 'user' AND actor_id = app_current_user());
+```
+
+A request handler cannot write an `admin` or `system` entry. Recipient and
+system rows come from the `SECURITY DEFINER` functions and the workers, under
+roles of their own.
+
+### Two separations worth naming
+
+**`admin_users` is not a flag on `users`.** An admin is a different principal
+with a different login and a different audit expectation; a boolean on the user
+table is how a compromised customer account becomes a compromised console.
+
+**`read` and `read_content` are different actions.** Listing that a vault
+exists and opening what is inside it are different powers. Conflating them
+would make every support agent capable of reading family photographs.
+
+### Deferred, deliberately: partitioning `audit_logs`
+
+The design notes call for monthly partitions over a 24-month retention. This
+migration creates an ordinary table, because drizzle-kit cannot model
+partitioning and faking it would make the migration story worse than the
+problem.
+
+**The trade-off is explicit:** converting later requires a table rewrite. At
+Release 1 volumes the `ix_audit_retention` index serves the purge adequately;
+the moment it does not, `pg_partman` takes the table over in a maintenance
+window. Revisit this before the audit table passes roughly a hundred million
+rows.
+
+### Verify
+
+```bash
+npm run test:e2e        # 106 tests across eight suites
+```
+
+| | |
+|---|---|
+| the API reading roles, admins or moderation flags | 0 rows each, while the owner sees them |
+| the API creating a role | `42501` |
+| a user writing their own audit row | succeeds |
+| the API forging an `admin` audit row | `42501` |
+| a user reading their own access log | 1 row; a stranger sees 0 |
+| **rewriting the audit trail as the table owner** | **`42501`** |
+| deleting an audit row as the owner | `42501` |
+| a break-glass request self-approved | `23514` |
+| a reason of "support" | `23514` |
+| the subject reading the record about them | 1 row; a stranger sees 0 |
+| recording `user_notified_at` | succeeds |
+| editing the reason afterwards | `42501` |
+| filing a report | succeeds; only the reporter sees it |
+| reporting the same thing twice | `23505` — repeat reports are not votes |
+| editing a report after filing | 0 rows |
+| reporting on somebody else's behalf | `42501` |
+| a flag with a reviewer but no review time | `23514` |
+| blocking somebody | the blocker sees it, the blocked user does not |
+| blocking yourself | `23514` |
+| reading feature flags | visible; writing them returns 0 rows |
+| a rollout of 150% | `23514` |
+
+---
+
+## The schema is complete
+
+**38 tables. 60 policies. 22 triggers. 106 integration tests.**
+
+| Domain | Tables |
+|---|---|
+| identity | 4 |
+| tenancy | 2 |
+| people | 4 |
+| archive | 6 |
+| promises | 6 |
+| sharing | 3 |
+| billing | 4 |
+| governance | 9 |
+
+Every table has row-level security enabled. Every tenant-scoped table resolves
+through `app_vault_role()`; every self-owned table through
+`app_current_user()`. The five paths that legitimately have no actor — session
+resolution, passkey lookup, capsule unlock, reply posting and share viewing —
+each go through one narrow `SECURITY DEFINER` function rather than a relaxed
+policy.
+
+What comes next is no longer schema: the API modules that use it, the admin
+role the console connects as, and the worker role that claims from
+`scheduled_jobs`.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -1585,7 +1749,7 @@ The schema is built one domain at a time, in dependency order:
 | 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs — **done** |
 | 14 | sharing | shares · notifications · notification_preferences — **done** |
 | 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features — **done** |
-| 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |
+| 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags — **done** |
 
 **38 tables for Release 1.** Built in dependency order because foreign keys demand
 it — everything references `users`, and `vault_members` needs `vaults`. One domain
