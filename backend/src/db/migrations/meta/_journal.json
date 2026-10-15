@@ -43,6 +43,13 @@
       "when": 1792048996607,
       "tag": "0005_freezing_ghost_rider",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792053521237,
+      "tag": "0006_tranquil_grim_reaper",
+      "breakpoints": true
     }
   ]
 }

@@ -226,6 +226,57 @@ export const JOB_KIND = [
   'search_index',
 ] as const;
 
+/** What kind of thing a share link points at. */
+export const SHARE_RESOURCE = ['memory', 'album'] as const;
+
+/**
+ * What the holder of a share link may do.
+ *
+ * Ordered least to most. `contribute` lets somebody add to a shared album
+ * without an account, which is how a wedding album collects photographs from
+ * forty guests who will never sign up.
+ */
+export const SHARE_PERMISSION = ['view', 'comment', 'contribute'] as const;
+
+/**
+ * Every kind of notification the product sends.
+ *
+ * Split by whether a user may switch it off. That split is not a preference —
+ * it is a property of the type, enforced in the schema rather than trusted to
+ * the code that writes preference rows.
+ */
+export const NOTIFICATION_TYPE = [
+  'capsule_delivered',
+  'capsule_opened',
+  'capsule_reply',
+  'occasion_reminder',
+  'on_this_day',
+  'memory_added',
+  'vault_invite',
+  'storage_warning',
+
+  // Non-suppressible, below.
+  'capsule_failed',
+  'security_alert',
+  'billing',
+] as const;
+
+/**
+ * The notifications a user may NOT switch off.
+ *
+ * A delivery FAILURE is here while a delivery confirmation is not, and that
+ * asymmetry is the point: somebody whose capsule did not arrive must find out
+ * while they can still do something about it.
+ *
+ * The UI shows these locked, with the reason — never as a toggle that appears
+ * broken.
+ */
+export const NON_SUPPRESSIBLE_NOTIFICATIONS = [
+  'capsule_failed',
+  'security_alert',
+  'billing',
+] as const;
+
 /** Subscription tiers. */
 export const PLAN = ['free', 'premium', 'family'] as const;
 
@@ -256,6 +307,9 @@ export const deliveryChannelSchema = z.enum(DELIVERY_CHANNEL);
 export const deliveryStatusSchema = z.enum(DELIVERY_STATUS);
 export const jobStateSchema = z.enum(JOB_STATE);
 export const jobKindSchema = z.enum(JOB_KIND);
+export const shareResourceSchema = z.enum(SHARE_RESOURCE);
+export const sharePermissionSchema = z.enum(SHARE_PERMISSION);
+export const notificationTypeSchema = z.enum(NOTIFICATION_TYPE);
 export const planSchema = z.enum(PLAN);
 export const pushProviderSchema = z.enum(PUSH_PROVIDER);
 export const devicePlatformSchema = z.enum(DEVICE_PLATFORM);
@@ -281,6 +335,9 @@ export type DeliveryChannel = (typeof DELIVERY_CHANNEL)[number];
 export type DeliveryStatus = (typeof DELIVERY_STATUS)[number];
 export type JobState = (typeof JOB_STATE)[number];
 export type JobKind = (typeof JOB_KIND)[number];
+export type ShareResource = (typeof SHARE_RESOURCE)[number];
+export type SharePermission = (typeof SHARE_PERMISSION)[number];
+export type NotificationType = (typeof NOTIFICATION_TYPE)[number];
 export type Plan = (typeof PLAN)[number];
 export type PushProvider = (typeof PUSH_PROVIDER)[number];
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[number];
@@ -312,6 +369,9 @@ export const ENUMS = Object.freeze({
   delivery_status: DELIVERY_STATUS,
   job_state: JOB_STATE,
   job_kind: JOB_KIND,
+  share_resource: SHARE_RESOURCE,
+  share_permission: SHARE_PERMISSION,
+  notification_type: NOTIFICATION_TYPE,
   plan: PLAN,
   push_provider: PUSH_PROVIDER,
   device_platform: DEVICE_PLATFORM,

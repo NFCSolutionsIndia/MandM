@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–13 complete. The service runs, connects as `mm_app`, and 22 of
-38 tables are built and tested. Step 14 onward continues the schema.
+**Status:** steps 1–14 complete. The service runs, connects as `mm_app`, and 25 of
+38 tables are built and tested. Step 15 onward continues the schema.
 
 ---
 
@@ -1267,6 +1267,114 @@ npm run test:e2e        # 53 tests across five suites
 
 ---
 
+## 14 · The sharing domain
+
+`shares` · `notifications` · `notification_preferences`
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0006_*.sql
+npm run db:migrate
+```
+
+Three small tables, two of which exist to close a hole rather than add a
+feature.
+
+### A polymorphic reference is a security hole, not an inconvenience
+
+`shares(resource_type, resource_id)` points at **either** `memories` or
+`albums`. PostgreSQL cannot express a foreign key to one of two tables, so
+there is none — and the consequence is worse than a dangling row:
+
+> The RLS policy on `shares` compares `vault_id`. **`vault_id` is whatever the
+> client sent.** A share naming the sender's own `vault_id` together with
+> another family's `resource_id` passes the policy, and then resolves to a
+> memory the sender cannot otherwise read.
+
+`share_resource_check()` closes it: a `BEFORE INSERT OR UPDATE` trigger that
+verifies the resource exists **and belongs to the vault the row claims**. It is
+`SECURITY DEFINER`, because RLS on `memories` would otherwise hide exactly the
+rows it needs to catch.
+
+A test asserts the forged share is rejected with `23503`. Without the trigger
+it would have been accepted.
+
+### `suppressible` is a generated column
+
+Whether a notification may be switched off is a property of its **type**, not of
+a user's preference. As an ordinary column, a row could claim a security alert
+is optional — and the code that wrote that row would be the only thing between
+a user and a silent breach notification.
+
+```sql
+"suppressible" boolean GENERATED ALWAYS AS
+  ("type" NOT IN ('capsule_failed','security_alert','billing')) STORED NOT NULL
+```
+
+It cannot be written at all — an attempt returns `428C9` — so no row can ever
+be wrong. A second constraint stops the channels being turned off underneath it:
+
+```sql
+CHECK (suppressible OR (push_enabled AND email_enabled))
+```
+
+Note which type is non-suppressible and which is not: a delivery **failure** is
+locked, a delivery **confirmation** is not. Somebody whose capsule did not
+arrive must find out while they can still do something about it.
+
+### Quiet hours are `time`, not `timestamptz`
+
+"Do not wake me between 22:00 and 07:00" is a wall-clock rule, interpreted in
+the user's own `timezone`. An instant would mean something different every time
+they flew. Both bounds are set or neither is — one alone describes no window,
+and the job would have to guess.
+
+### Revocation, and why the row survives it
+
+Revoking a share sets `revoked_at`; the next request fails. Because signed
+media URLs live five minutes, real-world exposure after revocation is **bounded
+to minutes** — which is precisely why that TTL is never raised for convenience.
+
+There is **no DELETE policy** on `shares`. A revoked link stays in the owner's
+list with its view count intact, because deleting the row would erase the
+evidence that an exposure happened. Control over a link is only meaningful if
+it is verifiable.
+
+A vault **admin** may revoke somebody else's share — unlike a capsule, which
+only its own owner may cancel. A share is not a promise to a third party; it is
+an open door, and whoever is responsible for the vault must be able to close it.
+
+### Notifications are written *to* the user, never *by* them
+
+`notifications` has a SELECT policy and an UPDATE policy — the update exists
+only so a user can mark something read. **There is no INSERT policy.** Jobs
+create notifications under their own role, so a request handler cannot invent
+one and the product cannot be made to tell a user something it never decided.
+
+### Verify
+
+```bash
+npm run test:e2e        # 70 tests across six suites
+```
+
+| | |
+|---|---|
+| a share naming another family's memory | `23503` — the trigger, where RLS alone would have passed it |
+| a share naming a resource that does not exist | `23503` |
+| resolving a live link with no account | 1 row |
+| recording a view | `view_count` becomes 1 |
+| resolving it after revocation | 0 rows, immediately |
+| the revoked link in the owner's list | still there, count intact |
+| a vault admin revoking another's link | succeeds |
+| a stranger listing links | 0 rows |
+| a request handler inserting a notification | `42501` |
+| writing to `suppressible` | `428C9` — a generated column |
+| switching off `security_alert` | `23514` |
+| switching off `capsule_delivered` | succeeds |
+| half a quiet-hours window | `23514` |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -1363,7 +1471,7 @@ The schema is built one domain at a time, in dependency order:
 | 11 | people | members · events · event_members · event_reminders — **done** |
 | 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members — **done** |
 | 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs — **done** |
-| 14 | sharing | shares · notifications · notification_preferences |
+| 14 | sharing | shares · notifications · notification_preferences — **done** |
 | 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |
 | 16 | governance | admin_users · roles · permissions · audit_logs · break_glass_access · reports · moderation_flags · blocks · feature_flags |
 
