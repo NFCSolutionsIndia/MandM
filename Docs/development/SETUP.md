@@ -4,9 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–20 complete. 40 tables, three database roles, and **both**
-auth realms working end to end — 157 integration tests across `backend/` and
-`admin/`.
+**Status:** steps 1–21 complete. 40 tables, three database roles, both auth
+realms, and **a console you can sign in to** — 157 integration tests.
 
 ---
 
@@ -2199,6 +2198,117 @@ npm run test:e2e        # 157 tests across eleven suites
 | **a customer token on an admin route** | **401** |
 | a backup code, twice | 200 then 401 |
 | sign-out | the next request is 401 |
+
+---
+
+## 21 · The console's sign-in page
+
+```bash
+cd admin
+npm install qrcode
+npm install -D @types/qrcode
+```
+
+Four routes — `/login`, `/login/code`, `/login/enrol`, `/login/totp` — plus a
+dashboard behind the session, a `/logout` Route Handler, and `src/proxy.ts`.
+
+### The token never reaches the browser
+
+httpOnly cookies, written on the server, inside the same Server Action that
+received them from the API. Not `localStorage`, not a JS-readable cookie, not
+a prop passed into a Client Component.
+
+This token opens a console that can read other people's family archives under
+break-glass. Anything that puts it within reach of an extension, an XSS or a
+screenshot of devtools is the wrong place for it.
+
+`sameSite: 'strict'` because the console is never linked to from anywhere, so
+there is no navigation it breaks — and it removes a class of cross-site
+request forgery without the forms carrying a token.
+
+**No client JavaScript in the sign-in flow at all.** Plain
+`<form action={serverAction}>`. It also means the console signs in with
+JavaScript disabled, which is a small thing until the evening a bundle fails
+to load and somebody needs to read an incident.
+
+### The enrolment screen says the quiet part
+
+The QR is rendered to **SVG on the server** — no client-side QR library, so the
+secret is already pixels before it leaves the process.
+
+The page states plainly that the backup codes are shown once and that there is
+no way to re-enrol without a colleague, because the server genuinely refuses
+to overwrite an existing secret. A screen that implies a "resend" that does not
+exist is worse than one that admits it.
+
+### Three things this version of Next forced
+
+**1 · `export const instant = false` on the sign-in routes.**
+
+Every meaningful thing on those pages is request data — the error from the last
+attempt, the address being signed in. There is no useful static shell, so the
+documented *block* option is the honest one. The build labels them `ƒ Dynamic`.
+
+**2 · `redirect()` from a page does NOT produce an HTTP redirect here.**
+
+> *"When used in a streaming context, this will insert a meta tag to emit the
+> redirect on the client side."*
+
+With `cacheComponents` enabled, page rendering is a streaming context. So a
+signed-out visitor got **HTTP 200** with a redirect buried in the body — fine
+for a browser, and a successful-looking page for curl, a probe, a crawler or a
+misconfigured proxy.
+
+The documented way to redirect *before* rendering is **Proxy** (`proxy.ts` —
+`middleware.ts` is deprecated in this version). `src/proxy.ts` now returns a
+real **307** for a request with no session cookie.
+
+It checks **presence, not validity**, and must: validating would mean an API
+round trip from a layer meant to be cheap enough to run at a CDN edge. So:
+
+| Request | Result |
+|---|---|
+| no cookie | **307** from the proxy, straight to `/login` |
+| a cookie the API rejects | 200 whose body redirects to `/logout`, which answers **307**. The body carries no admin data — verified |
+| a valid session | the dashboard |
+
+The matcher is written as an *exclusion*, so a page added next month is
+protected by default and opting out is a deliberate edit a reviewer can see.
+
+**3 · Cookies cannot be modified in a Server Component.**
+
+```
+Error: Cookies can only be modified in a Server Action or Route Handler.
+```
+
+The dashboard discovers a dead session while *rendering* — the API refuses the
+token — and at that moment it cannot clear the cookie. Hence `/logout`, a Route
+Handler, which can. Found by actually exercising the path with a bogus cookie;
+no test had covered it.
+
+### Verify
+
+With both running (`npm run dev:backend`, `npm run dev:frontend`):
+
+```bash
+curl -s -o /dev/null -w "%{http_code} -> %{redirect_url}\n" http://127.0.0.1:3001/
+# 307 -> http://127.0.0.1:3001/login
+```
+
+Then open <http://localhost:3001> and sign in as a seeded admin. The code is
+printed in the backend log. On first sign-in you get a QR and eight backup
+codes; afterwards the dashboard shows the email, role and permissions —
+fetched server-side with the cookie, so none of it passes through the client.
+
+To seed one:
+
+```sql
+INSERT INTO roles (id, name) VALUES (uuid_generate_v7(), 'support');
+INSERT INTO admin_users (id, email, role_id)
+SELECT uuid_generate_v7(), 'you@mm.internal', id FROM roles WHERE name = 'support';
+INSERT INTO permissions (role_id, module, action)
+SELECT id, 'users', 'read' FROM roles WHERE name = 'support';
+```
 
 ---
 

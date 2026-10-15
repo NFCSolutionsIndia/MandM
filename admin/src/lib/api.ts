@@ -77,6 +77,88 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
   }
 }
 
+/**
+ * One POST, optionally authenticated.
+ *
+ * The token is passed in rather than read from cookies here, so this module
+ * stays a transport and the decision about WHICH credential to use belongs to
+ * the caller. The half-authenticated MFA token and the full session token are
+ * both bearers and must never be confused for one another.
+ */
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  token?: string | null,
+): Promise<ApiResult<T>> {
+  return send<T>(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+/** One authenticated GET. */
+export async function apiGetAuthed<T>(
+  path: string,
+  token: string,
+): Promise<ApiResult<T>> {
+  return send<T>(path, { method: 'GET', token });
+}
+
+async function send<T>(
+  path: string,
+  options: { method: string; body?: string; token?: string | null },
+): Promise<ApiResult<T>> {
+  const headers: Record<string, string> = { accept: 'application/json' };
+  if (options.body) headers['content-type'] = 'application/json';
+  if (options.token) headers.authorization = `Bearer ${options.token}`;
+
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      method: options.method,
+      headers,
+      body: options.body,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const parsed = (await response.json().catch(() => null)) as T | null;
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: response.ok ? parsed : null,
+      error: response.ok ? null : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'The API did not respond'
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error';
+
+    return { ok: false, status: 0, data: null, error: message };
+  }
+}
+
+/** What `/admin/v1/auth/verify-email` answers with. */
+export interface FirstFactor {
+  mfaToken: string;
+  mfaRequired: boolean;
+  enrolmentRequired: boolean;
+  enrolment?: { secret: string; uri: string; backupCodes: string[] };
+}
+
+/** What `/admin/v1/auth/me` answers with. */
+export interface AdminIdentity {
+  id: string;
+  email: string;
+  role: string;
+  lastLoginAt: string | null;
+  permissions: { module: string; action: string }[];
+}
+
 export interface Readiness {
   status: string;
   database: {
