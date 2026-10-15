@@ -30,8 +30,8 @@ export * from './columns.js';
 export * from './identity.js'; // 07 users · sessions · passkey_credentials · devices
 export * from './tenancy.js'; // 08 vaults · vault_members
 export * from './people.js'; // 11 members · events · event_members · event_reminders
-// 12 archive     memories · media_assets · albums · album_memories · upload_sessions
-//                memory_members — belongs to people, but references memories
+export * from './archive.js'; // 12 memories · media_assets · upload_sessions
+//                              albums · album_memories · memory_members
 // 13 promises    capsules · capsule_recipients · capsule_memories · capsule_replies
 //                delivery_attempts · scheduled_jobs
 // 14 sharing     shares · notifications · notification_preferences

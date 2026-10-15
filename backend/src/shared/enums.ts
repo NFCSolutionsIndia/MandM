@@ -57,8 +57,68 @@ export const UNLOCK_KIND = ['datetime', 'milestone', 'manual'] as const;
  */
 export const OCCURRED_PRECISION = ['exact', 'day', 'month', 'year'] as const;
 
-/** What kind of media a memory holds. */
-export const MEDIA_KIND = ['photo', 'video', 'voice', 'text'] as const;
+/**
+ * What kind of file a media asset is.
+ *
+ * Three values, not four: a voice note is `audio`, and a text-only memory is
+ * a memory with no media assets at all rather than one with a `text` asset.
+ * The distinction matters because every value here implies a transcode
+ * pipeline, a thumbnail strategy and a player — and text implies none of them.
+ */
+export const MEDIA_KIND = ['image', 'video', 'audio'] as const;
+
+/**
+ * Where a media asset is in the derivative pipeline.
+ *
+ * `skipped` is not a failure: a 90 KB JPEG needs no transcode, and conflating
+ * that with `failed` would make the retry sweep chase work that was never
+ * required.
+ */
+export const TRANSCODE_STATUS = [
+  'pending',
+  'processing',
+  'ready',
+  'failed',
+  'skipped',
+] as const;
+
+/**
+ * Whether a row written offline has reached the server cleanly.
+ *
+ * The apps write locally first and sync afterwards, so a memory can exist on
+ * a device before it exists here. `conflict` is the state that must never be
+ * resolved silently — two edits to the same memory are a question for the
+ * person, not for a last-write-wins rule.
+ */
+export const SYNC_STATE = ['synced', 'pending', 'conflict'] as const;
+
+/** How an album came to exist. */
+export const ALBUM_TYPE = ['manual', 'event', 'shared'] as const;
+
+/**
+ * The lifecycle of a resumable upload.
+ *
+ * `aborted` and `expired` are separate because only one of them is the
+ * user’s doing, and the storage cleanup differs: an aborted multipart upload
+ * is cancelled immediately, an expired one is swept.
+ */
+export const UPLOAD_STATUS = [
+  'pending',
+  'uploading',
+  'completed',
+  'aborted',
+  'expired',
+] as const;
+
+/**
+ * How a person came to be tagged in a memory.
+ *
+ * `auto` means a model proposed it, and such a row is a *suggestion* until
+ * `confirmed_at` is set. Never collapse the two: a wrong automatic tag that
+ * presents itself as fact is how a product tells somebody their late father
+ * is in a photograph he is not in.
+ */
+export const MEMORY_MEMBER_SOURCE = ['manual', 'auto'] as const;
 
 /** Who can see a memory. */
 export const MEMORY_VISIBILITY = [
@@ -112,6 +172,11 @@ export const capsuleStateSchema = z.enum(CAPSULE_STATE);
 export const unlockKindSchema = z.enum(UNLOCK_KIND);
 export const occurredPrecisionSchema = z.enum(OCCURRED_PRECISION);
 export const mediaKindSchema = z.enum(MEDIA_KIND);
+export const transcodeStatusSchema = z.enum(TRANSCODE_STATUS);
+export const syncStateSchema = z.enum(SYNC_STATE);
+export const albumTypeSchema = z.enum(ALBUM_TYPE);
+export const uploadStatusSchema = z.enum(UPLOAD_STATUS);
+export const memoryMemberSourceSchema = z.enum(MEMORY_MEMBER_SOURCE);
 export const memoryVisibilitySchema = z.enum(MEMORY_VISIBILITY);
 export const eventTypeSchema = z.enum(EVENT_TYPE);
 export const recurrenceSchema = z.enum(RECURRENCE);
@@ -128,6 +193,11 @@ export type CapsuleState = (typeof CAPSULE_STATE)[number];
 export type UnlockKind = (typeof UNLOCK_KIND)[number];
 export type OccurredPrecision = (typeof OCCURRED_PRECISION)[number];
 export type MediaKind = (typeof MEDIA_KIND)[number];
+export type TranscodeStatus = (typeof TRANSCODE_STATUS)[number];
+export type SyncState = (typeof SYNC_STATE)[number];
+export type AlbumType = (typeof ALBUM_TYPE)[number];
+export type UploadStatus = (typeof UPLOAD_STATUS)[number];
+export type MemoryMemberSource = (typeof MEMORY_MEMBER_SOURCE)[number];
 export type MemoryVisibility = (typeof MEMORY_VISIBILITY)[number];
 export type EventType = (typeof EVENT_TYPE)[number];
 export type Recurrence = (typeof RECURRENCE)[number];
@@ -150,6 +220,11 @@ export const ENUMS = Object.freeze({
   unlock_kind: UNLOCK_KIND,
   occurred_precision: OCCURRED_PRECISION,
   media_kind: MEDIA_KIND,
+  transcode_status: TRANSCODE_STATUS,
+  sync_state: SYNC_STATE,
+  album_type: ALBUM_TYPE,
+  upload_status: UPLOAD_STATUS,
+  memory_member_source: MEMORY_MEMBER_SOURCE,
   memory_visibility: MEMORY_VISIBILITY,
   event_type: EVENT_TYPE,
   recurrence: RECURRENCE,

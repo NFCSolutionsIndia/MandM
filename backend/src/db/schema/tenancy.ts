@@ -6,6 +6,7 @@ import {
   primaryKey,
   uniqueIndex,
   varchar,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 import {
@@ -13,6 +14,7 @@ import {
   VAULT_ROLE,
   VAULT_TYPE,
 } from '../../shared/enums.js';
+import { mediaAssets } from './archive.js';
 import {
   createdAt,
   enumCheck,
@@ -65,11 +67,15 @@ export const vaults = pgTable(
     type: enumColumn('type', VAULT_TYPE).notNull().default('personal'),
 
     /**
-     * No foreign key to `media_assets` yet — that table arrives with the archive
-     * domain. The constraint is added there, in its own migration, so this one
-     * stays applicable on its own.
+     * Deferred until `media_assets` existed; added in migration 0004.
+     *
+     * `set null` rather than `cascade`: removing the photograph that happened
+     * to be the cover must never be a way to delete a family's vault.
      */
-    coverMediaId: uuidRef('cover_media_id'),
+    coverMediaId: uuidRef('cover_media_id').references(
+      (): AnyPgColumn => mediaAssets.id,
+      { onDelete: 'set null' },
+    ),
 
     /**
      * The visibility a new memory gets when the uploader does not choose one.

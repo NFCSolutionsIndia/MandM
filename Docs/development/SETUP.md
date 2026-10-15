@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–11 complete. The service runs, connects as `mm_app`, and 10 of
-38 tables are built and tested. Step 12 onward continues the schema.
+**Status:** steps 1–12 complete. The service runs, connects as `mm_app`, and 16 of
+38 tables are built and tested. Step 13 onward continues the schema.
 
 ---
 
@@ -578,9 +578,22 @@ policies. Measured against `mm_dev`, connected as `mm_app`:
 | `UPDATE` another family's vault | **`UPDATE 0`** — no error |
 | `DELETE FROM users` | **`DELETE 0`** — no error |
 
-A `WITH CHECK` clause **raises**. A `USING` clause **filters** — the rows simply
-are not visible to the statement, so the statement succeeds having changed
-nothing. That is correct PostgreSQL behaviour and it is a trap:
+**`USING` decides which existing rows a statement may touch. `WITH CHECK`
+decides whether the resulting row is allowed.** That one distinction explains
+every row in the table above, and which of the two rejects you decides whether
+you get an error or silence:
+
+| Rejected by | Result |
+|---|---|
+| `WITH CHECK` — the new row is not allowed | **raises `42501`** |
+| `USING` — the existing row is not yours to touch | **0 rows, no error** |
+
+So an `UPDATE` can go either way. Editing your own memory but naming a vault
+you have no role in **raises**, because `USING` matched and `WITH CHECK`
+refused. Editing somebody else's memory is **silent**, because `USING` filtered
+it out before the new row was ever considered.
+
+That is correct PostgreSQL behaviour and it is a trap:
 
 > **Every write handler must treat "0 rows affected" as a refusal**, and answer
 > 403 or 404. A handler that returns 200 because the `UPDATE` did not throw will
@@ -962,6 +975,162 @@ than splitting migration 0003 across two tables that cannot both apply.
 
 ---
 
+## 12 · The archive domain
+
+`memories` · `media_assets` · `upload_sessions` · `albums` · `album_memories` ·
+`memory_members`
+
+The largest domain, and the first that is genuinely **vault-scoped** — so
+`vaultScope()` is finally used for what it was written for, and the role
+hierarchy from `vault_members` starts doing work.
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0004_*.sql
+npm run db:migrate
+```
+
+### Three columns decide whether this is an archive or an upload folder
+
+| Column | Why it is the product |
+|---|---|
+| `occurred_at` | **When it happened, never the upload time.** A scanned 1974 wedding photograph belongs in 1974, not on the Tuesday somebody digitised it. The timeline orders by this |
+| `occurred_precision` | That photograph has a *year*. Without this, an imported archive either invents a timestamp it cannot justify or collapses every old photograph onto the upload date |
+| `note` | The meaning, not the file. Consumer photo storage solved storage and left this unsolved — forty thousand images with no record of why any mattered |
+
+### `vault_id` on `media_assets` is denormalised on purpose
+
+It is reachable through `memory_id`, and stored again anyway. Two reasons:
+
+1. The post-query scope guard checks `vault_id` on **every returned row of
+   every result set**. Making that a join puts a join in the hot path of a
+   security control.
+2. The RLS policy on `media_assets` resolves by reading one column of its own
+   row — no function call, no second table.
+
+The consistency risk is bounded: a media asset never moves vault. And because
+the policy trusts that column, the column has to be *checked* rather than
+trusted on write — a test asserts that forging it in the payload is refused.
+
+### Offline idempotency
+
+```sql
+CREATE UNIQUE INDEX ux_memories_client ON memories (author_id, client_id);
+```
+
+The apps write locally and sync later. When a create fails ambiguously —
+request sent, response lost — the outbox retries. This index turns that retry
+into a detectable conflict instead of a second copy of the same moment.
+
+Scoped to the author rather than globally unique, because a client id is
+generated on a device and no device can be trusted not to collide with another.
+
+### No DELETE policy on `memories` or `media_assets`
+
+Deliberate, and the strongest control in the schema so far.
+
+Deletion is a **soft delete** — an `UPDATE` of `deleted_at`, thirty days of
+Trash. The purge job that eventually issues a real `DELETE` runs under a
+different role with its own credential. **A request handler cannot destroy a
+family's archive even if it tries**, which a test proves by trying.
+
+`albums` *does* have a DELETE policy, because an album holds no media of its
+own — deleting one destroys nothing irreplaceable.
+
+### Search, hand-written in the migration
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX ft_memories_search ON memories
+  USING GIN (to_tsvector('simple', coalesce(search_text, '')));
+
+CREATE INDEX ix_memories_search_trgm ON memories
+  USING GIN (search_text gin_trgm_ops);
+```
+
+Two indexes answering different questions: the tsvector index handles words and
+stems, the trigram index handles the half-remembered and the misspelt — which
+is most of how anyone searches a family archive.
+
+`'simple'` rather than `'english'`: this archive is India-first and
+multilingual, and English stemming on a Marathi or Hindi phrase is worse than no
+stemming at all.
+
+`search_text` is maintained by the application and **cannot** be a generated
+column — the people tagged in a memory live in another table, and PostgreSQL
+cannot reach across one from a generated expression.
+
+### PostgreSQL has no unsigned integers
+
+The older design notes say `BIGINT UNSIGNED`, which is MySQL. Here it is a
+`bigint` plus a CHECK:
+
+```sql
+CONSTRAINT ck_media_bytes CHECK (bytes >= 0)
+```
+
+Same guarantee, stated explicitly. A negative byte count is worth catching at
+the boundary rather than in a billing total.
+
+> The same notes claim partial indexes are unavailable and keep `deleted_at`
+> out of the index key. That is also MySQL. PostgreSQL has
+> `WHERE deleted_at IS NULL`, and the timeline index uses it — smaller, and it
+> contains only live rows.
+
+### The deferred foreign keys, now resolved
+
+Three columns had been declared without their constraint because
+`media_assets` did not exist:
+
+| | |
+|---|---|
+| `users.avatar_media_id` | → `media_assets`, `ON DELETE set null` |
+| `members.avatar_media_id` | → `media_assets`, `ON DELETE set null` |
+| `vaults.cover_media_id` | → `media_assets`, `ON DELETE set null` |
+
+`set null` throughout: removing the photograph that happened to be a cover must
+never be a way to delete a vault, a user or a member.
+
+### `memory_members` spans two ownership models
+
+The only policy in the schema that does. A memory belongs to a **vault**; a
+member belongs to **one user**. So tagging requires both — permission to write
+the memory, *and* ownership of the person.
+
+A contributor to a shared family vault may tag their own people in it and never
+somebody else's, which is what stops a shared vault from becoming a way to
+enumerate another family's address book.
+
+### Verify
+
+```bash
+npm run test:e2e        # 33 tests across four suites
+```
+
+`test/archive.e2e-spec.ts` uses three people and two vaults. The interesting one
+is **Vikram, a *viewer* of Aarav's vault** — every earlier test proved an
+outsider sees nothing; these prove an *insider with the wrong role* cannot
+write:
+
+| | |
+|---|---|
+| a viewer reads | 1 row |
+| a viewer writes | `42501` — membership is not permission |
+| attributing a memory to somebody else | `42501` |
+| moving a memory to a vault you do not belong to | `42501`, and the row is unchanged |
+| the same `client_id` twice | `23505` — the offline retry |
+| `DELETE` on a memory | **0 rows**, and the row is still there |
+| soft delete, then restore | drops out of the timeline, comes back |
+| forging `vault_id` on a media asset | `42501` |
+| `bytes: -1` | `23514` |
+| an album ending before it starts | `23514` |
+| tagging another user's member | `42501` |
+| a confidence score on a *manual* tag | `23514` — a person's statement is not a probability |
+| a 1974 memory | still reads 1974, with precision `year` |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -1056,7 +1225,7 @@ The schema is built one domain at a time, in dependency order:
 | 9 | *(no tables)* | row-level security — the `mm_app` role and the policies — **done** |
 | 10 | *(no tables)* | the database module, the actor, and a test suite — **done** |
 | 11 | people | members · events · event_members · event_reminders — **done** |
-| 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members |
+| 12 | archive | memories · media_assets · albums · album_memories · upload_sessions · memory_members — **done** |
 | 13 | promises | capsules · capsule_recipients · capsule_memories · capsule_replies · delivery_attempts · scheduled_jobs |
 | 14 | sharing | shares · notifications · notification_preferences |
 | 15 | billing | subscriptions · payments · subscription_channels · subscription_ai_features |

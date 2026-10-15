@@ -18,6 +18,7 @@ import {
   OCCURRED_PRECISION,
   RECURRENCE,
 } from '../../shared/enums.js';
+import { mediaAssets } from './archive.js';
 import {
   calendarDate,
   citext,
@@ -78,8 +79,11 @@ export const members = pgTable(
      */
     relationship: varchar('relationship', { length: 64 }),
 
-    /** FK added with the archive domain, which owns `media_assets`. */
-    avatarMediaId: uuidRef('avatar_media_id'),
+    /** Deferred until `media_assets` existed; added in migration 0004. */
+    avatarMediaId: uuidRef('avatar_media_id').references(
+      (): AnyPgColumn => mediaAssets.id,
+      { onDelete: 'set null' },
+    ),
 
     phone: varchar('phone', { length: 32 }),
     phoneVerifiedAt: utcTimestamp('phone_verified_at'),

@@ -8,9 +8,11 @@ import {
   text,
   uniqueIndex,
   varchar,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 import { DEVICE_PLATFORM, PLAN, PUSH_PROVIDER } from '../../shared/enums.js';
+import { mediaAssets } from './archive.js';
 import {
   citext,
   createdAt,
@@ -60,11 +62,14 @@ export const users = pgTable(
     name: varchar('name', { length: 200 }).notNull(),
 
     /**
-     * No foreign key to `media_assets`, even though it is one logically.
-     * That table does not exist yet and belongs to a later domain; adding the
-     * constraint there keeps this migration applicable on its own.
+     * The foreign key was deferred until `media_assets` existed, and added in
+     * migration 0004. `set null`, so deleting the photo a user chose as their
+     * avatar does not delete the user.
      */
-    avatarMediaId: uuidRef('avatar_media_id'),
+    avatarMediaId: uuidRef('avatar_media_id').references(
+      (): AnyPgColumn => mediaAssets.id,
+      { onDelete: 'set null' },
+    ),
 
     locale: varchar('locale', { length: 16 }).notNull().default('en-IN'),
 
