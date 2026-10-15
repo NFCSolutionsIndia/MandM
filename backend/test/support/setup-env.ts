@@ -42,5 +42,15 @@ for (const url of [appUrl, ownerUrl]) {
 }
 
 process.env.DATABASE_URL = appUrl;
+
+// The console connection, when the suite exercises the admin realm. Same
+// rule: it may only ever point at mm_test.
+const adminUrl = process.env.TEST_ADMIN_DATABASE_URL;
+if (adminUrl) {
+  if (!adminUrl.includes('mm_test')) {
+    throw new Error(`Refusing to run: ${adminUrl.split('@')[1]} is not mm_test`);
+  }
+  process.env.ADMIN_DATABASE_URL = adminUrl;
+}
 process.env.MIGRATION_DATABASE_URL = ownerUrl;
 process.env.NODE_ENV = 'test';

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
+import { AdminModule } from './admin/admin.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validateEnv } from './config/env.schema.js';
@@ -38,6 +39,7 @@ import { VaultsModule } from './vaults/vaults.module.js';
 
     MailModule,
     AuthModule,
+    AdminModule,
     VaultsModule,
     HealthModule,
   ],

@@ -58,6 +58,39 @@ export const envSchema = z.object({
   MIGRATION_DATABASE_URL: postgresUrl.optional(),
 
   /**
+   * The CONSOLE credential. This is `mm_admin`.
+   *
+   * A third connection, because the admin realm is a different principal
+   * with different policies: `mm_admin` can read any account and no
+   * content, unless a live break-glass grant says otherwise. Routing the
+   * console through `mm_app` would make every admin query subject to
+   * `app.user_id` instead, which is the wrong question entirely.
+   *
+   * Optional, so a deployment that serves only the mobile API need not
+   * hold a credential the console uses.
+   */
+  ADMIN_DATABASE_URL: postgresUrl.optional(),
+
+  /**
+   * 32 bytes, base64, for the `_enc` columns on `admin_users`.
+   *
+   * A TOTP secret cannot be hashed — the server has to reproduce it to
+   * check a code — so it is encrypted with a key that lives OUTSIDE the
+   * database. That is the whole point: a leaked backup is then not enough
+   * to generate second factors.
+   *
+   * Generate with:
+   *   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   */
+  ADMIN_ENCRYPTION_KEY: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v === undefined || Buffer.from(v, 'base64').length === 32,
+      'must decode to exactly 32 bytes of base64',
+    ),
+
+  /**
    * Connections per process.
    *
    * Deliberately small. Each container holds up to this many, and the fleet is

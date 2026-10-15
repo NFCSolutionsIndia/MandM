@@ -39,5 +39,6 @@ export * from './sharing.js'; // 14 shares · notifications · notification_pref
 export * from './billing.js'; // 15 subscriptions · payments
 //                              subscription_channels · subscription_ai_features
 export * from './governance.js'; // 16 admin_users · roles · permissions
+export * from './admin.js'; // 20 admin_sessions — the console's own realm
 //                                audit_logs · break_glass_access · reports
 //                                moderation_flags · blocks · feature_flags

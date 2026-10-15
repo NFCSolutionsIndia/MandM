@@ -31,6 +31,7 @@
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-fastify": "^12.1.2",
     "drizzle-orm": "^0.45.4",
+    "otpauth": "^9.5.2",
     "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

@@ -2,8 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
-import { ActorContext } from './actor-context.js';
-import { DRIZZLE } from './db.tokens.js';
+import { AdminContext, ActorContext } from './actor-context.js';
+import { ADMIN_DRIZZLE, DRIZZLE } from './db.tokens.js';
 import type * as schema from './schema/index.js';
 
 export type Db = NodePgDatabase<typeof schema>;
@@ -21,7 +21,10 @@ export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 export class DbService {
   private readonly logger = new Logger(DbService.name);
 
-  constructor(@Inject(DRIZZLE) private readonly db: Db) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: Db,
+    @Inject(ADMIN_DRIZZLE) private readonly adminDb: Db | null = null,
+  ) {}
 
   /**
    * The connection with NO transaction and NO actor.
@@ -82,6 +85,41 @@ export class DbService {
    */
   async txAs<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
     return ActorContext.run(userId, () => this.tx(fn));
+  }
+
+  /**
+   * Run `fn` as the current ADMIN, on the console’s own connection.
+   *
+   * ══════════════════════════════════════════════════════════════════════════
+   *  A different POOL, not a `SET ROLE` on the existing one.
+   * ══════════════════════════════════════════════════════════════════════════
+   *
+   * `SET ROLE` would have to be reset every time a connection returns to
+   * the pool, and one missed reset hands admin privileges to whichever
+   * request borrows it next. Two pools cannot make that mistake.
+   *
+   * The actor goes into `app.admin_id`, which is a separate setting from
+   * `app.user_id` — so `app_current_user()` is NULL on this connection and
+   * no user policy can be satisfied by an admin session.
+   */
+  async adminTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    if (!this.adminDb) {
+      throw new Error(
+        'ADMIN_DATABASE_URL is not configured; this deployment has no console.',
+      );
+    }
+
+    const admin = AdminContext.adminId();
+
+    return this.adminDb.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.admin_id', ${admin ?? ''}, true)`);
+      return fn(tx);
+    });
+  }
+
+  /** Whether this deployment has a console connection at all. */
+  get hasAdminConnection(): boolean {
+    return this.adminDb !== null;
   }
 
   /**

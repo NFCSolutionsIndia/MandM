@@ -12,3 +12,14 @@ export const DRIZZLE = Symbol('DRIZZLE');
 
 /** The underlying `pg` connection pool. Needed to close it on shutdown. */
 export const PG_POOL = Symbol('PG_POOL');
+
+/**
+ * The console’s Drizzle instance, connected as `mm_admin`.
+ *
+ * A second pool rather than a second role on one pool: `SET ROLE` would
+ * have to be reset on every release back to the pool, and a single missed
+ * reset hands admin privileges to the next request that borrows the
+ * connection.
+ */
+export const ADMIN_DRIZZLE = Symbol('ADMIN_DRIZZLE');
+export const ADMIN_PG_POOL = Symbol('ADMIN_PG_POOL');

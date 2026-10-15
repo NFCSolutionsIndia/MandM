@@ -11,7 +11,12 @@ import { Pool } from 'pg';
 
 import type { Env } from '../config/env.schema.js';
 import { DbService } from './db.service.js';
-import { DRIZZLE, PG_POOL } from './db.tokens.js';
+import {
+  ADMIN_DRIZZLE,
+  ADMIN_PG_POOL,
+  DRIZZLE,
+  PG_POOL,
+} from './db.tokens.js';
 import * as schema from './schema/index.js';
 
 /**
@@ -90,12 +95,60 @@ import * as schema from './schema/index.js';
         }),
     },
 
+    {
+      provide: ADMIN_PG_POOL,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => {
+        const url = config.get('ADMIN_DATABASE_URL', { infer: true });
+
+        /**
+         * Optional. A deployment that serves only the mobile API holds no
+         * console credential at all, which is the strongest possible
+         * version of "the API cannot read the governance tables".
+         */
+        if (!url) return null;
+
+        const pool = new Pool({
+          connectionString: url,
+
+          /**
+           * Deliberately small. The console is a handful of staff, not a
+           * million phones, and these connections count against the same
+           * Aurora ceiling as the application pool.
+           */
+          max: 4,
+          statement_timeout: config.get('DB_STATEMENT_TIMEOUT_MS', { infer: true }),
+          idle_in_transaction_session_timeout: config.get('DB_IDLE_TX_TIMEOUT_MS', { infer: true }),
+          application_name: 'mm-admin',
+        });
+
+        pool.on('error', (err) => {
+          new Logger('AdminPgPool').error(
+            `Idle client error: ${err.message}`,
+            err.stack,
+          );
+        });
+
+        return pool;
+      },
+    },
+
+    {
+      provide: ADMIN_DRIZZLE,
+      inject: [ADMIN_PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? drizzle(pool, { schema, casing: 'snake_case' }) : null,
+    },
+
     DbService,
   ],
-  exports: [DbService, DRIZZLE],
+  exports: [DbService, DRIZZLE, ADMIN_DRIZZLE],
 })
 export class DbModule implements OnApplicationShutdown {
-  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
+  constructor(
+    @Inject(PG_POOL) private readonly pool: Pool,
+    @Inject(ADMIN_PG_POOL) private readonly adminPool: Pool | null,
+  ) {}
 
   /**
    * Close the pool on shutdown.
@@ -107,5 +160,6 @@ export class DbModule implements OnApplicationShutdown {
    */
   async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
+    await this.adminPool?.end();
   }
 }

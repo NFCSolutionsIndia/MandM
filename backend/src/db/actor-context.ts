@@ -30,6 +30,20 @@ interface Actor {
 
 const storage = new AsyncLocalStorage<Actor>();
 
+/**
+ * The console’s actor, kept in its OWN storage.
+ *
+ * Not a field on `Actor`, and not the same setting in the database. One
+ * request is never both a user and an admin, and sharing the slot would
+ * mean an admin session could satisfy a user policy — which is exactly the
+ * boundary `admin_users` exists to draw.
+ */
+interface AdminActor {
+  readonly adminId: string;
+}
+
+const adminStorage = new AsyncLocalStorage<AdminActor>();
+
 export const ActorContext = {
   /**
    * Run `fn` with `userId` as the actor. Everything awaited inside — however
@@ -52,5 +66,16 @@ export const ActorContext = {
    */
   userId(): string | null {
     return storage.getStore()?.userId ?? null;
+  },
+};
+
+/** The same contract, for the console. */
+export const AdminContext = {
+  run<T>(adminId: string, fn: () => T): T {
+    return adminStorage.run({ adminId }, fn);
+  },
+
+  adminId(): string | null {
+    return adminStorage.getStore()?.adminId ?? null;
   },
 };

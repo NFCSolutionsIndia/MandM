@@ -4,9 +4,9 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–19 complete. The schema is finished (39 tables), the first
-endpoints work end to end, and all three database roles exist — 141 integration
-tests across `backend/` and `admin/`.
+**Status:** steps 1–20 complete. 40 tables, three database roles, and **both**
+auth realms working end to end — 157 integration tests across `backend/` and
+`admin/`.
 
 ---
 
@@ -2080,6 +2080,128 @@ is neither superuser nor table owner and every policy applies.
 
 ---
 
+## 20 · Admin login
+
+```bash
+cd backend
+npm install otpauth
+npm run db:generate       # writes src/db/migrations/0013_*.sql
+npm run db:migrate
+```
+
+Then, per environment:
+
+```bash
+docker exec mm-postgres psql -U postgres -d mm_dev -c \
+  "ALTER ROLE mm_admin WITH LOGIN PASSWORD '<password>';"
+
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# → ADMIN_ENCRYPTION_KEY
+```
+
+### Two factors, neither of them a password
+
+| | |
+|---|---|
+| 1 | an emailed code — proves control of the corporate mailbox |
+| 2 | a TOTP code — proves possession of the enrolled device |
+
+Consistent with the rest of the product, and genuinely *two* factors rather
+than two spellings of one: a mailbox compromise alone does not reach the
+console, and a stolen phone alone does not either. **No bypass.** The console
+can read other people's family archives under break-glass; one factor is not a
+credential worth that.
+
+### A 40th table, and why it could not be `sessions`
+
+`admin_sessions` is separate because reusing `sessions` would mean a foreign
+key to `users` — making an admin a kind of user, and putting one compromised
+customer account one step from the console. The realms stay apart all the way
+down: different table, different role, different actor setting, different
+token.
+
+It is also where the factors are reconciled. A session exists after the email
+code is redeemed and is **useless** until `mfa_completed_at` is set. The only
+thing it can do in between is present a TOTP code — a test confirms that token
+gets 401 from `/me`.
+
+**Eight hours, not extended on use.** A customer session rolls forward for
+thirty days because signing a grandmother out monthly is a real cost. An admin
+session is a working day: a forgotten browser tab should stop being dangerous
+by morning.
+
+### The sign-in function is deliberately not the user one
+
+`app_redeem_email_code` **creates an account** when the address is unknown —
+right for a product where sign-up and sign-in are one flow, and catastrophic
+here: anybody who can receive mail could mint themselves an admin.
+
+`app_admin_redeem_code` creates nothing. An address that is not an active
+admin gets the same empty result as a wrong code — and **the code is spent
+either way**, so a valid code cannot be replayed while somebody works out which
+addresses are staff. A test asserts no `users` row appears.
+
+### The TOTP secret is encrypted, not hashed
+
+A TOTP secret is a bearer credential and *cannot* be hashed, because the server
+must reproduce it to check a code. So it is encrypted with AES-256-GCM under a
+key that lives **outside** the database — which is the whole point: a leaked
+backup alone generates no second factors.
+
+GCM because it is authenticated: a tampered ciphertext fails to decrypt rather
+than decrypting to something attacker-chosen. The nonce is random per
+encryption and stored alongside, as it must be — a reused nonce under one key
+breaks GCM completely.
+
+Enrolment material is returned **exactly once** and is not recoverable.
+`app_admin_enrol_totp` refuses to overwrite an existing secret; otherwise
+anybody holding a first-factor token could replace the second factor with one
+of their own, which would make it decorative.
+
+Backup codes work once each. Using one is audited and logged as a warning.
+
+### A third pool, not a `SET ROLE`
+
+The console connects as `mm_admin` on its own pool. `SET ROLE` would have to
+be reset every time a connection returns to the pool, and **one missed reset
+hands admin privileges to whichever request borrows it next.** Two pools cannot
+make that mistake.
+
+`ADMIN_DATABASE_URL` is optional: a deployment serving only the mobile API
+holds no console credential at all, which is the strongest possible version of
+"the API cannot read the governance tables".
+
+`app.admin_id` is a separate setting from `app.user_id`, so
+`app_current_user()` is NULL on every admin connection and no user policy can
+be satisfied by an admin session.
+
+### Verify
+
+```bash
+npm run test:e2e        # 157 tests across eleven suites
+```
+
+| | |
+|---|---|
+| a staff address and a stranger | byte-identical 202 |
+| a non-admin address with a valid code | 401, **and the code is spent** |
+| …and no `users` row created | 0 rows |
+| a deactivated admin | 401 |
+| first sign-in | returns an `otpauth://` URI and 8 backup codes |
+| the stored secret | encrypted, three base64url parts, not the plaintext |
+| **a first-factor token against `/me`** | **401** |
+| a wrong TOTP | 401 |
+| a valid TOTP | 200, 8-hour session |
+| `/me` | email, role and permissions, from the console connection |
+| the audit trail | `admin.totp_enrolled` and `admin.signed_in` |
+| a second enrolment attempt | refused; the secret is unchanged |
+| **an admin token on a customer route** | **401** |
+| **a customer token on an admin route** | **401** |
+| a backup code, twice | 200 then 401 |
+| sign-out | the next request is 401 |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -2116,6 +2238,9 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `DB_IDLE_TX_TIMEOUT_MS` | no | 10000, enforced server-side |
 | `TEST_DATABASE_URL` | tests only | must name `mm_test` |
 | `TEST_MIGRATION_DATABASE_URL` | tests only | must name `mm_test` |
+| `ADMIN_DATABASE_URL` | no | the console, as `mm_admin`. Absent on an API-only deployment |
+| `ADMIN_ENCRYPTION_KEY` | console only | 32 bytes base64, for the TOTP secrets. **Held outside the database** |
+| `TEST_ADMIN_DATABASE_URL` | tests only | must name `mm_test` |
 
 **`admin/.env.local`** holds one variable, and it is not committed either:
 
