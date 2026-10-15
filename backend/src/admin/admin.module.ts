@@ -8,11 +8,13 @@ import { MailModule } from '../mail/mail.module.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminActorMiddleware } from './admin.middleware.js';
+import { DashboardController } from './dashboard.controller.js';
+import { DashboardService } from './dashboard.service.js';
 
 @Module({
   imports: [MailModule],
-  controllers: [AdminAuthController],
-  providers: [AdminAuthService],
+  controllers: [AdminAuthController, DashboardController],
+  providers: [AdminAuthService, DashboardService],
 })
 export class AdminModule implements NestModule {
   /**
