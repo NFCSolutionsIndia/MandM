@@ -1,0 +1,22 @@
+{
+  "name": "mandm",
+  "private": true,
+  "description": "Moments & Memories — backend API and admin console",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix admin run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:frontend": "npm --prefix admin run build",
+    "test": "npm --prefix backend test",
+    "test:e2e": "npm --prefix backend run test:e2e",
+    "lint": "npm --prefix backend run lint && npm --prefix admin run lint",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix admin run typecheck",
+    "db:generate": "npm --prefix backend run db:generate",
+    "db:migrate": "npm --prefix backend run db:migrate",
+    "db:studio": "npm --prefix backend run db:studio",
+    "install:all": "npm --prefix backend install && npm --prefix admin install"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
