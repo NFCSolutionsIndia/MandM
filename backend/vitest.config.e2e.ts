@@ -19,6 +19,10 @@ export default defineConfig({
     environment: 'node',
     root: './',
     include: ['test/**/*.e2e-spec.ts'],
+
+    // Runs before any spec is imported, which is the only point early enough
+    // to influence ConfigModule.forRoot() in app.module.ts. See the file.
+    setupFiles: ['./test/support/setup-env.ts'],
     fileParallelism: false,
 
     // A migration run plus a schema reset is slower than a unit test.

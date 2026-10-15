@@ -27,6 +27,7 @@
 export * from './columns.js';
 
 // ─── Domains ─────────────────────────────────────────────────────────────────
+export * from './auth.js'; // 17 email_otps — the hand-rolled sign-in path
 export * from './identity.js'; // 07 users · sessions · passkey_credentials · devices
 export * from './tenancy.js'; // 08 vaults · vault_members
 export * from './people.js'; // 11 members · events · event_members · event_reminders

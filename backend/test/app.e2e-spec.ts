@@ -6,6 +6,8 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
+import 'dotenv/config';
+
 import { AppModule } from '../src/app.module.js';
 
 /**
@@ -21,6 +23,11 @@ describe('application', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    // The app under test must use mm_test, not the mm_dev that .env names.
+    // dotenv does not override an already-set process.env, so assigning it
+    // here wins over the file — and the suite asserts against the same
+    // database the application is writing to.
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

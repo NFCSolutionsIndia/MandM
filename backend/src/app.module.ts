@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { APP_GUARD } from '@nestjs/core';
+
+import { AuthGuard } from './auth/auth.guard.js';
+import { AuthModule } from './auth/auth.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { DbModule } from './db/db.module.js';
 import { HealthModule } from './health/health.module.js';
+import { MailModule } from './mail/mail.module.js';
+import { VaultsModule } from './vaults/vaults.module.js';
 
 @Module({
   imports: [
@@ -32,9 +36,27 @@ import { HealthModule } from './health/health.module.js';
     // The connection pool, global so feature modules do not each import it.
     DbModule,
 
+    MailModule,
+    AuthModule,
+    VaultsModule,
     HealthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    {
+      /**
+       * Authentication required by default.
+       *
+       * Registered globally so that a new route is protected the moment it is
+       * written, and opting out is an explicit `@Public()` that a reviewer can
+       * see in the diff. The alternative — remembering to add a guard — fails
+       * open the first time somebody forgets.
+       *
+       * It is still only a 401. The real boundary is row-level security, which
+       * would deny an unauthenticated request even if this guard vanished.
+       */
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
 })
 export class AppModule {}

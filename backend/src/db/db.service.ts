@@ -24,6 +24,23 @@ export class DbService {
   constructor(@Inject(DRIZZLE) private readonly db: Db) {}
 
   /**
+   * The connection with NO transaction and NO actor.
+   *
+   * Reserved for the handful of calls that cannot have an actor by
+   * definition: resolving a session before anybody is authenticated, redeeming
+   * a sign-in code, opening a share link. Every one of them goes through a
+   * `SECURITY DEFINER` function that is narrow by construction.
+   *
+   * Never use this to read a table. A query through here runs as `mm_app` with
+   * `app.user_id` unset, so row-level security denies everything —
+   * which means a mistake here fails closed and loudly rather than quietly
+   * returning rows it should not.
+   */
+  get raw(): Db {
+    return this.db;
+  }
+
+  /**
    * Run `fn` inside a transaction, with the current actor applied.
    *
    * ═════════════════════════════════════════════════════════════════════════

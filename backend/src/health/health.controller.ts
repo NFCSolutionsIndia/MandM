@@ -1,5 +1,6 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 
+import { Public } from '../auth/auth.guard.js';
 import { DbService } from '../db/db.service.js';
 
 /**
@@ -10,6 +11,15 @@ import { DbService } from '../db/db.service.js';
  * server is listening is worse than none — it keeps a container in the load
  * balancer while every request it serves fails on the database.
  */
+/**
+ * `@Public()` on the class, and it is load-bearing.
+ *
+ * The global `AuthGuard` would otherwise return 401 here — the load
+ * balancer would mark every container unhealthy, and the service would
+ * never come up. A health check that requires a credential is not a health
+ * check.
+ */
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: DbService) {}

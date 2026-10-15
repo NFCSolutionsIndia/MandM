@@ -4,8 +4,8 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–16 complete. **The Release 1 schema is finished** — all 38
-tables, 60 policies and 106 integration tests. What follows is API work.
+**Status:** steps 1–17 complete. The schema is finished (39 tables, 60 policies)
+and **the first real endpoints work end to end** — 124 integration tests.
 
 ---
 
@@ -1648,6 +1648,170 @@ policy.
 What comes next is no longer schema: the API modules that use it, the admin
 role the console connects as, and the worker role that claims from
 `scheduled_jobs`.
+
+---
+
+## 17 · Authentication, and the first real endpoints
+
+The step that makes the schema reachable. Until now nothing populated
+`ActorContext`, so a real request saw **zero rows of everything**.
+
+```bash
+cd backend
+npm run db:generate       # writes src/db/migrations/0009_*.sql
+npm run db:migrate
+npm run start:dev
+```
+
+### A decision that overrides the stack document
+
+The architecture names **Better Auth**. We hand-rolled the session layer
+instead, because the schema built over steps 7–16 already implements one:
+`sessions.token_hash` stores a SHA-256 digest and `app_resolve_session()` is
+written against exactly that. Better Auth owns its own session table and stores
+the token itself, so they cannot both be the source of truth.
+
+**What that keeps:** a leaked database backup contains no working session.
+**What it costs:** we write the OTP flow ourselves, and `@simplewebauthn/server`
+will do the genuinely hard part when passkeys land.
+
+**And one table.** Better Auth would have supplied its `verification` table;
+hand-rolling means owning `email_otps` — the 39th table, and the honest cost of
+the decision.
+
+### The sign-in flow has no actor, so none of it is a policy
+
+`email_otps` has RLS enabled and **no policy at all**. A table of live sign-in
+codes readable by request code would be the single best thing to steal in the
+database. Four `SECURITY DEFINER` functions do the work instead:
+
+| | |
+|---|---|
+| `app_issue_email_code` | invalidates any live code first, so a stolen one cannot be held in reserve while the owner requests another |
+| `app_redeem_email_code` | redeems, finds or creates the account, and opens the session — **one call**, because splitting it would mean exposing `users` and `sessions` to a request with no actor |
+| `app_recent_email_code_count` | the rate limit |
+| `app_touch_session` | extends a session in use, and is a no-op unless expiry is near |
+
+**Every failure returns the same thing.** Wrong code, expired code, too many
+attempts, no code at all — one flat 401. The difference between "wrong code"
+and "no such account" is exactly what an enumeration attack is after. For the
+same reason `request-code` always answers 202, including when rate-limited.
+
+A six-digit code is one in a million, which is weak. Its security is the
+ten-minute expiry and the **five-attempt counter** enforced inside the redeem
+function, not the number.
+
+### The keystone: middleware, not a guard
+
+`ActorMiddleware` is the only place in the application that decides who the
+actor is.
+
+It is **middleware** because a guard returns a boolean and cannot wrap the rest
+of the request — and `AsyncLocalStorage.run()` requires exactly that wrapping,
+so the actor is visible to every `await` beneath the handler and invisible to
+every other request on the process.
+
+It **never rejects**. An unauthenticated request proceeds with no actor, and the
+database then shows it nothing. A route that forgets its guard leaks an empty
+list rather than somebody's archive.
+
+`AuthGuard` is registered globally and is only a 401 — a courtesy so callers
+get an honest error instead of a confusing empty list. Delete it tomorrow and
+every handler still returns nothing, because `app.user_id` would be unset and
+sixty policies would deny. **That ordering is the whole design.** A system whose
+authorization lives in guards fails open the first time somebody forgets one.
+
+### What the first product endpoint does not contain
+
+```ts
+const rows = await this.db.tx((tx) => tx.select().from(vaults));
+```
+
+No `WHERE owner_id = ?`. No membership check. No authorization code of any
+kind. The select is written as though the table held only this user's rows,
+because as far as this connection is concerned it does.
+
+`GET /api/v1/vaults/debug/row-counts` makes the point bluntly: an unqualified
+`count(*)` over three whole tables still counts only what the caller may see.
+
+### Two bugs the tests caught
+
+**1 · The global guard protected `/health`.** The load balancer would have got
+401 from every container, marked them all unhealthy, and the service would
+never have come up. `@Public()` on the health controller. Found by a test that
+was checking something else.
+
+**2 · The app under test wrote to `mm_dev` while the suite asserted against
+`mm_test`**, so every assertion failed for a reason unrelated to the code.
+
+> The fix is worth knowing: **`ConfigModule.forRoot({...})` is evaluated when
+> `app.module.ts` is imported**, not when the testing module is compiled. So
+> setting `process.env.DATABASE_URL` inside `beforeAll` is already too late.
+> It has to be a `setupFiles` entry, which runs before the spec is imported at
+> all — and `test/support/setup-env.ts` now also refuses to run against
+> anything but `mm_test`, so no integration test can reach `mm_dev` however it
+> is written.
+
+### And one the tests did not
+
+Reading an id out of a real sign-in response showed
+`026f9048-e106-4cef-…` — a **v4** UUID.
+
+`uuidPk()` declares application-generated UUIDv7, but `$defaultFn()` only
+applies to inserts that go through Drizzle. The `SECURITY DEFINER` functions
+insert directly and used `gen_random_uuid()`. Four tables were affected —
+`users`, `sessions`, `email_otps`, `capsule_replies` — including the two
+highest-insert-rate tables in the product, which is precisely where the
+argument for v7 lives.
+
+Migration `0010` adds `uuid_generate_v7()` (PostgreSQL 18 ships `uuidv7()`;
+this is 17) and `CREATE OR REPLACE`s the four functions. There is now a test
+asserting the version nibble on every id those functions create.
+
+> **This migration has no schema change**, so drizzle-kit generates nothing.
+> The file is hand-written and its `meta/_journal.json` entry added by hand —
+> the supported way to ship a DDL-only or data-only migration.
+
+### The endpoints
+
+| | |
+|---|---|
+| `POST /api/v1/auth/request-code` | 202, always |
+| `POST /api/v1/auth/verify` | → `{ token, expiresInDays, isNewAccount }` |
+| `GET  /api/v1/auth/me` | `WHERE id = app_current_user()` — no input can make it return somebody else |
+| `POST /api/v1/auth/sign-out` | revoked on the **next** request, which is why sessions are rows |
+| `POST /api/v1/auth/sign-out-others` | the "I lost my phone" button |
+| `GET  /api/v1/vaults` · `POST /api/v1/vaults` | the first product endpoints |
+| `GET  /health` · `/health/ready` | public, and outside the version prefix |
+
+In development the sign-in code is written to the log. `MailService` **throws
+in production** rather than doing that — a deploy that silently logged sign-in
+codes would be a breach, not a bug.
+
+### Verify
+
+```bash
+npm run test:e2e        # 124 tests across nine suites
+```
+
+`test/auth.e2e-spec.ts` drives the whole chain over HTTP:
+
+| | |
+|---|---|
+| a code request for an unknown address | 202, word for word the same as a known one |
+| a malformed address | 400, and the value is not echoed back |
+| a wrong code | 401, "That code is not valid." |
+| the right code | account created, token issued |
+| what the database stored | the **hash**, not the token |
+| the same code twice | 401 |
+| ids created inside SQL functions | version nibble `7` |
+| a protected route with no token | 401 |
+| the bearer token | resolves to the actor |
+| two signed-in users | each sees only their own vault |
+| an unqualified `count(*)` over three tables | scoped per caller |
+| sign-out | the next request is 401 |
+| the revoked session row | kept, not deleted |
+| `/health` | 200; `/api/v1/health` is 404 |
 
 ---
 
