@@ -1,11 +1,18 @@
 import { redirect } from 'next/navigation';
 
-import { AuthCard, CodeInput, FieldError, SubmitButton } from '@/components/shell';
+import {
+  CardFoot,
+  CardHead,
+  CodeInput,
+  ErrorStrip,
+  Field,
+  KeyIcon,
+  PrimaryButton,
+} from '@/components/form';
 import { getMfaToken } from '@/lib/session';
 import { verifyTotp } from '../actions';
 
 export const metadata = { title: 'Second factor · M&M Admin' };
-
 export const instant = false;
 
 export default async function TotpPage({
@@ -17,24 +24,30 @@ export default async function TotpPage({
   if (!mfaToken) redirect('/login');
 
   return (
-    <AuthCard
-      step="Step 2 of 2"
-      title="Your authenticator"
-      blurb="Enter the six digits currently showing for Moments & Memories."
-    >
-      {error === 'code' ? (
-        <FieldError>That code is not valid.</FieldError>
-      ) : null}
+    <>
+      <CardHead
+        title="Your authenticator"
+        blurb="Enter the six digits currently showing for Moments & Memories."
+      />
 
-      <form action={verifyTotp} className="space-y-4">
-        <CodeInput label="Code from your authenticator" />
-        <SubmitButton>Sign in</SubmitButton>
+      <form action={verifyTotp} className="mt-7 space-y-5">
+        <Field label="Code from your authenticator" icon={<KeyIcon />}>
+          <CodeInput />
+        </Field>
+
+        <PrimaryButton>Sign in</PrimaryButton>
       </form>
 
-      <p className="mt-5 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        Lost the device? A backup code works here instead, once each. The token
-        you are holding right now can do nothing except answer this screen.
-      </p>
-    </AuthCard>
+      {error === 'code' ? (
+        <ErrorStrip>That code is not valid.</ErrorStrip>
+      ) : null}
+
+      <CardFoot
+        note="Lost the device? A backup code works here, once each."
+        status={
+          <span className="text-mm-text-soft text-[13px]">Step 2 of 2</span>
+        }
+      />
+    </>
   );
 }

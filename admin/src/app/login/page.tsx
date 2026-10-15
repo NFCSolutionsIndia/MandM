@@ -1,71 +1,107 @@
-import { AuthCard, FieldError, SubmitButton } from '@/components/shell';
+import {
+  CardFoot,
+  CardHead,
+  ErrorStrip,
+  Field,
+  InfoStrip,
+  MailIcon,
+  PrimaryButton,
+  TextInput,
+} from '@/components/form';
 import { requestCode } from './actions';
 
-export const metadata = { title: 'Sign in · M&M Admin' };
+export const metadata = { title: 'Staff sign in · M&M Admin' };
 
 /**
  * Blocking, not prerendered.
  *
- * Every meaningful thing on this page is request data — the error from the
- * last attempt, the address being signed in. There is no useful static shell
- * to ship first, so the documented `block` option is the honest one: it
- * renders on the server at request time instead of pretending otherwise.
- *
- * The dashboard does the opposite, because it HAS a shell worth sending
- * early and streams the session behind <Suspense>.
+ * Everything meaningful here is request data — the error from the last
+ * attempt. There is no static shell worth shipping first, so the documented
+ * `block` option is the honest one.
  */
 export const instant = false;
 
-export default async function LoginPage({
-  searchParams,
-}: PageProps<'/login'>) {
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
+      <rect
+        x="4"
+        y="10"
+        width="16"
+        height="10"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M8 10V7a4 4 0 1 1 8 0v3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
   const { error } = await searchParams;
 
   return (
-    <AuthCard
-      step="Step 1 of 2"
-      title="Sign in to the console"
-      blurb={
-        <>
-          Two factors, neither of them a password: a code to your mailbox, then
-          a code from your authenticator.
-        </>
-      }
-    >
-      {error === 'email' ? (
-        <FieldError>That does not look like an email address.</FieldError>
-      ) : null}
-      {error === 'unreachable' ? (
-        <FieldError>
-          The API is not reachable. Start it with{' '}
-          <code className="font-mono">npm run dev:backend</code>.
-        </FieldError>
-      ) : null}
+    <>
+      <CardHead
+        title="Staff sign in"
+        blurb="Your M&M app account does not work here. Use your work email."
+      />
 
-      <form action={requestCode} className="space-y-4">
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Work email
-          </span>
-          <input
+      <form action={requestCode} className="mt-7 space-y-5">
+        <Field label="Work email" icon={<MailIcon />}>
+          <TextInput
             name="email"
             type="email"
             autoComplete="username"
             required
             autoFocus
-            placeholder="you@mm.internal"
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            placeholder="you@momentsandmemories.in"
           />
-        </label>
+        </Field>
 
-        <SubmitButton>Send me a code</SubmitButton>
+        <div className="flex items-baseline justify-between gap-4">
+          <p className="text-mm-text-soft text-[13px]">
+            No &ldquo;remember me&rdquo; — sessions end after 8&nbsp;h
+          </p>
+          <span
+            className="text-mm-text-soft/70 text-[13px]"
+            title="There is no password to forget. Sign-in is a code to your mailbox plus your authenticator."
+          >
+            No passwords here
+          </span>
+        </div>
+
+        <PrimaryButton>Continue</PrimaryButton>
       </form>
 
-      <p className="mt-5 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        You will get the same answer whether or not this address belongs to an
-        admin. That is deliberate — the staff list is worth having if you intend
-        to phish somebody.
-      </p>
-    </AuthCard>
+      {error === 'email' ? (
+        <ErrorStrip>That does not look like an email address.</ErrorStrip>
+      ) : null}
+      {error === 'unreachable' ? (
+        <ErrorStrip>
+          The API is not reachable. Start it with{' '}
+          <code className="font-mono">npm run dev:backend</code>.
+        </ErrorStrip>
+      ) : null}
+
+      <InfoStrip icon={<LockIcon />}>
+        Two factors: a code to your mailbox, then your authenticator.
+      </InfoStrip>
+
+      <CardFoot
+        note="Locked out? Ask a Super admin."
+        status={
+          <span className="text-mm-text-soft text-[13px]">
+            Same answer for any address
+          </span>
+        }
+      />
+    </>
   );
 }
