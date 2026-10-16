@@ -14,7 +14,9 @@
     "db:generate": "npm --prefix backend run db:generate",
     "db:migrate": "npm --prefix backend run db:migrate",
     "db:studio": "npm --prefix backend run db:studio",
-    "install:all": "npm --prefix backend install && npm --prefix admin install"
+    "install:all": "npm --prefix backend install && npm --prefix admin install",
+    "dev:worker": "npm --prefix backend run worker:dev",
+    "seed:dev": "npm --prefix backend run seed:dev"
   },
   "engines": {
     "node": ">=22"

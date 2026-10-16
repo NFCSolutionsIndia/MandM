@@ -72,6 +72,27 @@ export const envSchema = z.object({
   ADMIN_DATABASE_URL: postgresUrl.optional(),
 
   /**
+   * The DELIVERY ENGINE credential. This is `mm_worker`.
+   *
+   * A fourth connection, because the worker answers a different question
+   * again: it may claim jobs and read only the memories inside a capsule
+   * that is actually in flight. Routing it through `mm_app` would make
+   * every query depend on `app.user_id`, and the worker has no user.
+   *
+   * Optional, so the API container need not hold it.
+   */
+  WORKER_DATABASE_URL: postgresUrl.optional(),
+
+  /** How long a claimed job is leased before the reaper may take it back. */
+  WORKER_LEASE_SECONDS: z.coerce.number().int().positive().default(300),
+
+  /** Jobs claimed per tick. Small, so one slow batch cannot stall the loop. */
+  WORKER_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(25),
+
+  /** Seconds between ticks when the queue came back empty. */
+  WORKER_IDLE_SECONDS: z.coerce.number().int().positive().default(5),
+
+  /**
    * 32 bytes, base64, for the `_enc` columns on `admin_users`.
    *
    * A TOTP secret cannot be hashed — the server has to reproduce it to

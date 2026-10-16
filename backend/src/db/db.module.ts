@@ -16,6 +16,8 @@ import {
   ADMIN_PG_POOL,
   DRIZZLE,
   PG_POOL,
+  WORKER_DRIZZLE,
+  WORKER_PG_POOL,
 } from './db.tokens.js';
 import * as schema from './schema/index.js';
 
@@ -140,14 +142,66 @@ import * as schema from './schema/index.js';
         pool ? drizzle(pool, { schema, casing: 'snake_case' }) : null,
     },
 
+    {
+      provide: WORKER_PG_POOL,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => {
+        const url = config.get('WORKER_DATABASE_URL', { infer: true });
+        if (!url) return null;
+
+        const pool = new Pool({
+          connectionString: url,
+
+          /**
+           * Small, and separate from the API’s. The worker is a handful
+           * of long-running loops rather than a fleet of request
+           * handlers, and its connections count against the same Aurora
+           * ceiling.
+           */
+          max: 4,
+
+          /**
+           * NO statement timeout.
+           *
+           * The API kills a slow query because a user is waiting. A
+           * delivery job has nobody waiting, and killing it mid-send is
+           * how a message gets sent without being recorded. The lease is
+           * the safety net here, not a timeout.
+           */
+          idle_in_transaction_session_timeout: config.get(
+            'DB_IDLE_TX_TIMEOUT_MS',
+            { infer: true },
+          ),
+          application_name: 'mm-worker',
+        });
+
+        pool.on('error', (err) => {
+          new Logger('WorkerPgPool').error(
+            `Idle client error: ${err.message}`,
+            err.stack,
+          );
+        });
+
+        return pool;
+      },
+    },
+
+    {
+      provide: WORKER_DRIZZLE,
+      inject: [WORKER_PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? drizzle(pool, { schema, casing: 'snake_case' }) : null,
+    },
+
     DbService,
   ],
-  exports: [DbService, DRIZZLE, ADMIN_DRIZZLE],
+  exports: [DbService, DRIZZLE, ADMIN_DRIZZLE, WORKER_DRIZZLE],
 })
 export class DbModule implements OnApplicationShutdown {
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(ADMIN_PG_POOL) private readonly adminPool: Pool | null,
+    @Inject(WORKER_PG_POOL) private readonly workerPool: Pool | null,
   ) {}
 
   /**
@@ -161,5 +215,6 @@ export class DbModule implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
     await this.adminPool?.end();
+    await this.workerPool?.end();
   }
 }

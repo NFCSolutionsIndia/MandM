@@ -24,7 +24,9 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "seed:dev": "tsx scripts/seed-dev.ts"
+    "seed:dev": "tsx scripts/seed-dev.ts",
+    "worker:dev": "nest start --watch --entryFile worker.main",
+    "worker:prod": "node dist/worker.main.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

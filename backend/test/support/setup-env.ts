@@ -52,5 +52,14 @@ if (adminUrl) {
   }
   process.env.ADMIN_DATABASE_URL = adminUrl;
 }
+// The delivery engine, when a suite exercises it. Same rule.
+const workerUrl = process.env.TEST_WORKER_DATABASE_URL;
+if (workerUrl) {
+  if (!workerUrl.includes('mm_test')) {
+    throw new Error(`Refusing to run: ${workerUrl.split('@')[1]} is not mm_test`);
+  }
+  process.env.WORKER_DATABASE_URL = workerUrl;
+}
+
 process.env.MIGRATION_DATABASE_URL = ownerUrl;
 process.env.NODE_ENV = 'test';

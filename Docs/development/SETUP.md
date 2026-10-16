@@ -4,8 +4,9 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–21 complete. 40 tables, three database roles, both auth
-realms, and **a console you can sign in to** — 157 integration tests.
+**Status:** steps 1–23 complete. 40 tables, **four** database roles, both auth
+realms, a console you can sign in to, and **a delivery engine that runs** —
+171 integration tests.
 
 ---
 
@@ -2312,6 +2313,177 @@ SELECT id, 'users', 'read' FROM roles WHERE name = 'support';
 
 ---
 
+## 22 · The console's screens, and what feeds them
+
+Covered in the commits for the sign-in page and the dashboard. The short
+version:
+
+- `admin/` is built to the supplied design, with sampled colours as named
+  tokens in `globals.css` and Figtree standing in for the brand face.
+- `GET /admin/v1/dashboard` computes every panel in one pass. Fields the
+  product cannot yet measure return `null` and render as "not measured"
+  rather than as a number somebody might repeat in a meeting.
+- Controls that do not exist are drawn as the comp shows them and rendered
+  **disabled**. During an incident a button that looks live and does nothing
+  is worse than one honestly greyed out.
+- `npm run seed:dev` fills `mm_dev` so the console has something to draw.
+
+**Migration 0014** gave the console read access for those panels — and closed
+a hole while doing it. `mm_admin` had table privileges on `capsules` with no
+row policy, so every figure would have rendered zero; adding the policy naively
+would have made `sender_note` readable. Counting capsules is operations;
+reading one is somebody's last letter, and a row policy cannot express that
+difference. Access to `capsules` and `capsule_recipients` is therefore granted
+**column by column**, and the message is not among them.
+
+---
+
+## 23 · The delivery engine
+
+```bash
+# per environment
+docker exec mm-postgres psql -U postgres -d mm_dev -c \
+  "ALTER ROLE mm_worker WITH LOGIN PASSWORD '<password>';"
+
+cd backend
+npm run worker:dev        # watch mode
+npm run worker:prod       # node dist/worker.main.js
+```
+
+The role, the policies, the claim query, the lease and the reaper have existed
+since step 19 with **nothing running them**. This is the process.
+
+### A fourth credential, and a separate process
+
+`WORKER_DATABASE_URL` is `mm_worker`. A separate pool for the same reason the
+console has one: `SET ROLE` would have to be reset on every release back to the
+pool, and one missed reset hands the wrong privileges to the next borrower.
+
+`src/worker.main.ts` boots a **standalone application context** — no HTTP
+server, no port. In production it is its own ECS service, and this module
+boundary is why that is a deployment decision rather than a rewrite.
+
+> **The worker pool has no `statement_timeout`.** The API kills a slow query
+> because a user is waiting. A delivery job has nobody waiting, and killing it
+> mid-send is how a message gets sent without being recorded. The lease is the
+> safety net here, not a timeout.
+
+### Claiming
+
+```sql
+UPDATE scheduled_jobs SET state = 'running', attempts = attempts + 1,
+       locked_by = $1, locked_until = now() + lease
+ WHERE id IN (SELECT id FROM scheduled_jobs
+               WHERE state = 'pending' AND run_at <= now()
+               ORDER BY run_at LIMIT $2
+                 FOR UPDATE SKIP LOCKED)
+RETURNING …
+```
+
+**One statement**, so the claim is atomic. SELECT-then-UPDATE would leave a
+window in which two workers both believe they own the job.
+
+`SKIP LOCKED` rather than `NOWAIT` or a plain `FOR UPDATE`: the first errors,
+the second makes a second worker *wait* for the first — which turns a pool of
+workers into a queue of one. A test runs two claims concurrently and asserts
+the job appears in exactly one.
+
+### The ordering that is the whole correctness argument
+
+```
+1. RESERVE the attempt row   ← before sending anything
+2. send
+3. record the outcome
+```
+
+Reserving first is what makes a crash survivable:
+
+| Crash between | Consequence |
+|---|---|
+| 1 and 2 | the row exists as `queued`; the retry sees it and does **not** send again. The capsule is **delayed** |
+| 2 and 3, without the reservation | the retry sends a **second copy** of a message from somebody's dead father |
+
+Of those two, one is recoverable. `ux_attempt_idempotent` enforces it, and the
+reservation and the send are deliberately **not** in one transaction — a
+transaction wrapping the provider call would hold a row lock for a network
+round trip and roll the reservation back exactly when the record of having
+tried matters most.
+
+### Retries in days, and death as a terminal state
+
+1 day, 2, 4, 8. A capsule has waited twenty years; it can wait another day for
+a mail server. Retrying in minutes would burn the whole budget in an afternoon
+on an outage that resolves itself overnight.
+
+After five attempts the job is `dead` — terminal, and needing a person. For
+`capsule_delivery` that is a Sev-0, and the console counts it as one.
+
+### The reaper, and what it does not do
+
+A worker that dies holding a job leaves it `running` with a lease nobody owns.
+For `capsule_delivery` that is a promise which never fires, **with no error
+anywhere**, because nothing failed — it was dropped.
+
+`reap()` returns those to `pending` and **does not increment `attempts`**: the
+job was abandoned, not tried, and charging it an attempt would spend the retry
+budget on a crash. A test also asserts it leaves a **live** lease alone —
+reaping a job somebody is still working on is how two workers send the same
+capsule.
+
+### The gateway refuses to run in production
+
+`DeliveryGateway` logs and reports success in development, which is enough to
+prove the ordering, the idempotency and the backoff — the parts that are hard
+to get right and impossible to test against a real provider.
+
+In production it **throws**. A deploy that marked capsules delivered without
+sending anything would be the single worst bug this product could have; better
+to fail every job loudly than to quietly tell a family their message arrived.
+`sms` and `whatsapp` fail honestly rather than reporting success, so a capsule
+addressed that way stays visibly undelivered.
+
+### A policy that was too narrow — migration 0015
+
+`capsules_worker` admitted `state IN ('sealed','delivering','delivered')`,
+which was deliberate: the engine has no business reading a draft. It also made
+a **cancelled** capsule invisible to the worker — while its delivery job still
+existed, because cancelling does not delete the job.
+
+So the handler read zero rows and could not tell *"this promise was withdrawn"*
+from *"this capsule has no recipients"*. It raised, retried, and after five
+days of backoff would have gone `dead` — **a Sev-0 page at 3am for a capsule
+the owner cancelled weeks earlier.**
+
+`cancelled` and `failed` are now visible; `draft` still is not. Caught by a
+test asserting the job completes quietly.
+
+> **A policy that is too narrow fails in the same direction as no policy at
+> all: silently, and in production.**
+
+### Verify
+
+```bash
+npm run test:e2e        # 171 tests across twelve suites
+```
+
+| | |
+|---|---|
+| a due job | claimed, capsule delivered, lease released |
+| the attempt row | `delivered`, with provider and message id |
+| the audit trail | a `system` row, `capsule.delivered` |
+| **replaying the same job** | **still one attempt** — no second send |
+| forcing a duplicate attempt row | `23505` |
+| a channel that fails | retried **tomorrow**, capsule visibly `delivering` |
+| five failures | `dead`, not round again |
+| a job abandoned by a dead worker | returned to `pending`, `attempts` unchanged |
+| a **live** lease | left alone |
+| two concurrent claims | the job appears in exactly one |
+| a job not yet due | not claimed |
+| a cancelled capsule | job completes, **nothing sent** |
+| an unlock still in the future | refused, capsule not delivered |
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -2351,6 +2523,11 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `ADMIN_DATABASE_URL` | no | the console, as `mm_admin`. Absent on an API-only deployment |
 | `ADMIN_ENCRYPTION_KEY` | console only | 32 bytes base64, for the TOTP secrets. **Held outside the database** |
 | `TEST_ADMIN_DATABASE_URL` | tests only | must name `mm_test` |
+| `WORKER_DATABASE_URL` | worker only | the delivery engine, as `mm_worker` |
+| `WORKER_LEASE_SECONDS` | no | 300. How long a claimed job is leased |
+| `WORKER_BATCH_SIZE` | no | 25. Jobs per tick |
+| `WORKER_IDLE_SECONDS` | no | 5. Sleep when the queue came back empty |
+| `TEST_WORKER_DATABASE_URL` | tests only | must name `mm_test` |
 
 **`admin/.env.local`** holds one variable, and it is not committed either:
 

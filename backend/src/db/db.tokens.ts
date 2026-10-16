@@ -23,3 +23,7 @@ export const PG_POOL = Symbol('PG_POOL');
  */
 export const ADMIN_DRIZZLE = Symbol('ADMIN_DRIZZLE');
 export const ADMIN_PG_POOL = Symbol('ADMIN_PG_POOL');
+
+/** The delivery engine’s instance, connected as `mm_worker`. */
+export const WORKER_DRIZZLE = Symbol('WORKER_DRIZZLE');
+export const WORKER_PG_POOL = Symbol('WORKER_PG_POOL');

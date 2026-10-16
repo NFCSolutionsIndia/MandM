@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { AdminContext, ActorContext } from './actor-context.js';
-import { ADMIN_DRIZZLE, DRIZZLE } from './db.tokens.js';
+import { ADMIN_DRIZZLE, DRIZZLE, WORKER_DRIZZLE } from './db.tokens.js';
 import type * as schema from './schema/index.js';
 
 export type Db = NodePgDatabase<typeof schema>;
@@ -24,6 +24,7 @@ export class DbService {
   constructor(
     @Inject(DRIZZLE) private readonly db: Db,
     @Inject(ADMIN_DRIZZLE) private readonly adminDb: Db | null = null,
+    @Inject(WORKER_DRIZZLE) private readonly workerDb: Db | null = null,
   ) {}
 
   /**
@@ -115,6 +116,36 @@ export class DbService {
       await tx.execute(sql`SELECT set_config('app.admin_id', ${admin ?? ''}, true)`);
       return fn(tx);
     });
+  }
+
+  /**
+   * Run `fn` on the delivery engine’s connection.
+   *
+   * No actor is set, and none is needed: the worker’s policies are scoped
+   * `TO mm_worker` and do not consult `app.user_id`. That is the point — a
+   * delivery in 2046 has no user session behind it.
+   */
+  async workerTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+    if (!this.workerDb) {
+      throw new Error(
+        'WORKER_DATABASE_URL is not configured; this process cannot deliver.',
+      );
+    }
+    return this.workerDb.transaction(fn);
+  }
+
+  /** The worker connection outside a transaction, for the claim UPDATE. */
+  get worker(): Db {
+    if (!this.workerDb) {
+      throw new Error(
+        'WORKER_DATABASE_URL is not configured; this process cannot deliver.',
+      );
+    }
+    return this.workerDb;
+  }
+
+  get hasWorkerConnection(): boolean {
+    return this.workerDb !== null;
   }
 
   /** Whether this deployment has a console connection at all. */
