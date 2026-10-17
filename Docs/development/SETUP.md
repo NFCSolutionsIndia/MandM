@@ -2529,6 +2529,21 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `WORKER_IDLE_SECONDS` | no | 5. Sleep when the queue came back empty |
 | `TEST_WORKER_DATABASE_URL` | tests only | must name `mm_test` |
 
+### Providers
+
+| Variable | Required | Notes |
+|---|---|---|
+| `RESEND_API_KEY` | no (dev) | Unset: codes print to the terminal. **In production, unset is a hard refusal** rather than a fallback |
+| `MAIL_FROM` | no | Must be a domain verified with the provider. `onboarding@resend.dev` works before yours is, but only sends to your own account address |
+| `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET` | upload only | Cloudflare R2. The token should be scoped **Object Read & Write on that bucket alone** |
+| `R2_ENDPOINT` | no | For anything S3-compatible that is not R2 — MinIO locally, or S3 later. Derived from the account id when absent |
+| `MEDIA_URL_TTL_SECONDS` | no | **300, and a security parameter.** It is the bound on how long a revoked share can still be opened. Ceiling 900 |
+| `UPLOAD_TTL_SECONDS` | no | 86400 |
+
+> **The bucket stays private.** Media is served by short-lived signed URLs,
+> never by a public bucket or a public `r2.dev` URL. A public URL cannot be
+> revoked, and "revocation is immediate" is a claim this product makes.
+
 **`admin/.env.local`** holds one variable, and it is not committed either:
 
 ```bash
@@ -2549,7 +2564,32 @@ the API task is given only `DATABASE_URL`. See [Server notes](#server-notes).
 
 ## Server notes
 
-The steps above describe a **developer machine**. A server differs in four ways:
+The deployment path is **local → VPS → AWS at roughly 10,000 users**. The
+architecture document specifies AWS end to end; that is still the
+destination, but it is not the first stop, so this section covers both.
+
+### On a VPS
+
+| Concern | On a VPS |
+|---|---|
+| Secrets | A `.env` file owned by the service user, `chmod 600`. There is no Secrets Manager |
+| Database | PostgreSQL 17 as a container or a package. Not Aurora — so **take your own backups**, because nothing else will |
+| Processes | `docker compose` or systemd units: one for the API, one for the worker. Not ECS tasks |
+| TLS and routing | Caddy or nginx in front. Not an ALB |
+| The four roles | Exactly as on a developer machine: `mm_app`, `mm_worker`, `mm_admin` each granted `LOGIN` and a password by hand. The migrations deliberately do not do this |
+
+What does **not** change: the migration pipeline, the Fastify adapter, the
+environment schema, every row-level security policy, and the rule that the
+API container holds only `DATABASE_URL`.
+
+> **The thing a VPS makes your problem:** backups. Aurora does continuous
+> backup with point-in-time recovery; a container does not. A nightly
+> `pg_dump` off the machine is the minimum, and it is worth proving a
+> restore once rather than discovering the gap during an incident.
+
+### On AWS, later
+
+The steps above describe a **developer machine**. The AWS target differs in four ways:
 
 1. **Credentials.** `postgres/postgres` and `mm_app/mm_app` are local-only. A
    server reads both URLs from the environment, backed by AWS Secrets Manager

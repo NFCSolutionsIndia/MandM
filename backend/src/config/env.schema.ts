@@ -142,6 +142,57 @@ export const envSchema = z.object({
    */
   DB_IDLE_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  // ─── Email ─────────────────────────────────────────────────────────────
+
+  /**
+   * Resend, the primary sender.
+   *
+   * Optional, and its absence is meaningful: without it the service logs
+   * codes to the console in development and REFUSES to start sending in
+   * production. A deploy that silently logged sign-in codes instead of
+   * mailing them would be a breach, not a bug.
+   */
+  RESEND_API_KEY: z.string().min(1).optional(),
+
+  /** The envelope sender. Must be a domain verified with the provider. */
+  MAIL_FROM: z.string().optional().default('Moments & Memories <noreply@localhost>'),
+
+  // ─── Object storage ────────────────────────────────────────────────────
+  //
+  // Cloudflare R2, which speaks the S3 API. Chosen for zero egress fees:
+  // this product serves 4K video back to the people who uploaded it, and on
+  // S3 the egress alone can exceed the subscription price.
+
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
+
+  /**
+   * An explicit endpoint, for anything S3-compatible that is not R2 —
+   * MinIO locally, or a migration to S3 later. Derived from the account id
+   * when absent.
+   */
+  R2_ENDPOINT: z.string().url().optional(),
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   *  How long a signed media URL lives. FIVE MINUTES, and this is a
+   *  security parameter rather than a tuning knob.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Revoking a share link stops the next request immediately, but a signed
+   * URL already handed out keeps working until it expires. That window IS
+   * this number: real exposure after revocation is bounded to minutes
+   * rather than forever.
+   *
+   * Raising it for convenience silently lengthens that window for every
+   * share in the product, which is why it has a hard ceiling here.
+   */
+  MEDIA_URL_TTL_SECONDS: z.coerce.number().int().positive().max(900).default(300),
+
+  /** How long a client has to finish an upload it started. */
+  UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(86_400),
   /**
    * The integration suite's database. Optional — the running service never
    * reads these, and a production task has no reason to hold them.
