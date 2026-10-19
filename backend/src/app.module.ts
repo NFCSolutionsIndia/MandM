@@ -3,12 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AdminModule } from './admin/admin.module.js';
+import { ArchiveModule } from './archive/archive.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validateEnv } from './config/env.schema.js';
 import { DbModule } from './db/db.module.js';
 import { HealthModule } from './health/health.module.js';
 import { MailModule } from './mail/mail.module.js';
+import { StorageModule } from './storage/storage.module.js';
 import { VaultsModule } from './vaults/vaults.module.js';
 
 @Module({
@@ -38,9 +40,11 @@ import { VaultsModule } from './vaults/vaults.module.js';
     DbModule,
 
     MailModule,
+    StorageModule,
     AuthModule,
     AdminModule,
     VaultsModule,
+    ArchiveModule,
     HealthModule,
   ],
   providers: [

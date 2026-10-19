@@ -2484,6 +2484,102 @@ npm run test:e2e        # 171 tests across twelve suites
 
 ---
 
+## 24 · The archive: memories, uploads, and signed media
+
+```bash
+cd backend
+npm install                      # resend, @aws-sdk/client-s3, s3-request-presigner
+npm run test:e2e                 # 186 tests, 13 suites
+```
+
+Nothing new to run. This step is the first that reaches **outside the
+machine** — to an email provider and to object storage — so what matters is
+what happens when those are absent, wrong, or lying.
+
+### Both providers are optional, and their absence means something
+
+| Provider | Unset in development | Unset in production |
+|---|---|---|
+| `RESEND_API_KEY` | the sign-in code prints to the terminal | **throws.** A deploy that logged sign-in codes instead of mailing them is a breach, not a degraded mode |
+| R2 (four variables) | `POST /uploads` answers `409` | same `409` — storage is simply not available |
+
+That asymmetry is deliberate. A missing mail key must never fail quietly,
+because the failure is invisible from the outside: users just never receive
+anything. A missing bucket fails loudly on its own, at the first upload.
+
+### The bytes never pass through the API
+
+```
+POST /uploads              → check quota, reserve a session, return a signed PUT
+PUT  <signed url>          → the client uploads DIRECTLY to R2
+POST /uploads/:id/complete → HEAD the object, record the asset, charge the quota
+GET  /media/:id/url        → a signed GET, 300 seconds
+```
+
+A 4K video routed through a request handler would hold it for minutes, and a
+rolling deploy would cancel somebody's upload halfway. It also means the API
+container never needs the memory to buffer a file it is not interested in.
+
+### Three things the quota depends on
+
+**The check happens before a byte moves.** Checking afterwards means paying
+for storage you then refuse — and telling somebody their video is over quota
+after twenty minutes on a mobile connection is its own kind of insult.
+
+**The size is read from the store, not from the client.** `completeUpload`
+calls `HEAD` and writes *that* number. A client that declares 5 MB and uploads
+5 GB would otherwise under-bill itself and walk through the quota wall.
+
+**The quota moves in the same transaction as the row that caused it.** Never a
+nightly recount: a quota that is right once a day is a quota a user can walk
+straight through for the other twenty-three hours.
+
+### Two bugs this step's tests found
+
+Both were real, both were in code whose comments claimed the opposite, and
+neither was reachable until the endpoints were exercised over HTTP.
+
+**A resumed upload pointed at a different object.** `POST /uploads` minted a
+fresh asset id on every call and overwrote `storage_upload_id` — so retrying
+handed the client a *new* key and stranded every byte already uploaded under
+the old one, leaving an orphan nothing in the database referenced. The comment
+directly above it said the id was minted "so the storage key is stable across
+retries." A resumed session now keeps the key it was given.
+
+**An oversized object failed on a check constraint.** When the store held more
+than the session declared, `ck_upload_bytes` (`bytes_received <= bytes_total`)
+fired and `translatingPgErrors` turned it into `400 "That value is not allowed
+here."` — which tells an operator nothing and sends a client away to guess
+which value. It is now checked explicitly, logged, and answered `413`.
+
+> This should be unreachable in production: `presignUpload` signs
+> `ContentLength` into the URL, so the store itself refuses a body of a
+> different size. Arriving there means the signature, the store, or the client
+> is wrong — which is exactly why it deserves an error that says so.
+
+### `MEDIA_URL_TTL_SECONDS` is a security parameter
+
+Revoking a share stops the next request immediately, but a signed URL already
+handed out keeps working until it expires. **That window is this number.**
+Default 300, hard ceiling 900 in the schema.
+
+> **The bucket stays private.** No public `r2.dev` URL. A public URL cannot be
+> revoked, and "revocation is immediate" is a claim this product makes.
+
+### Testing without a bucket
+
+`test/archive.api.e2e-spec.ts` replaces `StorageService` with a fake that
+remembers what it was told — not because a real bucket is hard to run, but
+because the interesting behaviour is on this side of it: that the quota is
+charged from the size the store reports, that an upload which never landed is
+refused, and that a retry does not double-charge. A real bucket proves the
+network works; this proves the product does.
+
+To exercise the real path, put live R2 credentials in `backend/.env` — it is
+gitignored, and nothing env-shaped has ever been committed.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace

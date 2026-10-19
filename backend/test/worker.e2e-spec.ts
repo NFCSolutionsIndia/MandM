@@ -1,5 +1,4 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { sql } from 'drizzle-orm';
 import type { Pool } from 'pg';
 
 import { WorkerModule } from '../src/worker/worker.module.js';
