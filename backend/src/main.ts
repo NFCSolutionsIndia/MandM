@@ -4,6 +4,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module.js';
+import { MailService } from './mail/mail.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -40,6 +41,17 @@ async function bootstrap() {
    * would do it, to every container.
    */
   app.enableShutdownHooks();
+
+  /**
+   * Prove the mail credentials now, not when somebody tries to sign in.
+   *
+   * SMTP authentication only fails at send time, so without this the first
+   * thing to discover a wrong password is a user watching a code that never
+   * arrives. Deliberately not awaited into a failure: it logs loudly and the
+   * API still starts, because a mail outage must not also take down reading
+   * the archive.
+   */
+  void app.get(MailService).verify();
 
   // Fastify binds to 127.0.0.1 by default. Inside a container that means nothing
   // outside the container can reach it, so bind all interfaces explicitly.

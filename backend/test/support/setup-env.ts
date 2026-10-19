@@ -63,3 +63,35 @@ if (workerUrl) {
 
 process.env.MIGRATION_DATABASE_URL = ownerUrl;
 process.env.NODE_ENV = 'test';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  No test may reach a real mail provider.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The auth suites sign in as aarav@example.com, bina@example.com and a dozen
+ * other addresses that do not exist. With SMTP configured in `.env` — which
+ * it now is, for local development against ZeptoMail — running the suite
+ * would send real mail to every one of them, and a provider measures an
+ * account by how much of what it sends bounces. One afternoon of `npm test`
+ * is enough to get a sending domain suspended.
+ *
+ * Cleared here rather than guarded inside MailService, for the same reason
+ * the database URLs are rewritten here: it is the only point early enough to
+ * be unconditional, and it cannot be forgotten by a suite written later.
+ *
+ * With both gone and NODE_ENV=test, the service logs codes to the console —
+ * which is exactly what the suites read them back from anyway. Object storage
+ * needs no equivalent: the archive suite replaces StorageService outright.
+ *
+ * Emptied rather than DELETED, and that distinction is the whole trick:
+ * `ConfigModule.forRoot()` runs dotenv again when app.module.ts is imported,
+ * and dotenv only skips a key that already exists in `process.env`. Deleting
+ * one invites it straight back from the file. An empty string still exists,
+ * so it survives — and `validateEnv` strips empty values before parsing, so
+ * the service sees no transport at all.
+ */
+process.env.SMTP_HOST = '';
+process.env.SMTP_USERNAME = '';
+process.env.SMTP_PASSWORD = '';
+process.env.RESEND_API_KEY = '';

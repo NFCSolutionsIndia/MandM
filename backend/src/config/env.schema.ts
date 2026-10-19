@@ -145,13 +145,37 @@ export const envSchema = z.object({
   // ─── Email ─────────────────────────────────────────────────────────────
 
   /**
-   * Resend, the primary sender.
+   * ═══════════════════════════════════════════════════════════════════════
+   *  Two ways to send, and the absence of BOTH is what is meaningful.
+   * ═══════════════════════════════════════════════════════════════════════
    *
-   * Optional, and its absence is meaningful: without it the service logs
-   * codes to the console in development and REFUSES to start sending in
-   * production. A deploy that silently logged sign-in codes instead of
-   * mailing them would be a breach, not a bug.
+   * SMTP is tried first, then Resend. With neither, the service logs codes to
+   * the console in development and REFUSES to send in production — a deploy
+   * that silently logged sign-in codes instead of mailing them would be a
+   * breach, not a bug.
+   *
+   * Two transports rather than one because a capsule that arrives is the
+   * product, and one vendor's bad afternoon must not be the reason it does
+   * not. SMTP is the lowest common denominator: every provider speaks it, so
+   * changing vendor is a change to this file rather than to the code.
    */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().max(65_535).default(587),
+  SMTP_USERNAME: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+
+  /**
+   * Implicit TLS from the first byte (port 465) rather than STARTTLS.
+   *
+   * Derived from the port when absent, which is right for every provider
+   * worth using. Either way the connection is encrypted — nodemailer will
+   * not fall back to plaintext, and this is a password travelling the wire.
+   */
+  SMTP_SECURE: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === true || v === 'true')),
+
   RESEND_API_KEY: z.string().min(1).optional(),
 
   /** The envelope sender. Must be a domain verified with the provider. */
@@ -218,7 +242,23 @@ export type Env = z.infer<typeof envSchema>;
  * configuration one failed boot at a time is miserable.
  */
 export function validateEnv(raw: Record<string, unknown>): Env {
-  const parsed = envSchema.safeParse(raw);
+  /**
+   * An empty variable means UNSET, not "set to nothing".
+   *
+   * `.env` files are full of `R2_ACCESS_KEY_ID=` lines waiting for a value,
+   * and dotenv reads those as an empty string. Without this, a placeholder
+   * somebody has not filled in yet fails an OPTIONAL variable's `.min(1)` and
+   * refuses to boot — which is a confusing way to say "this is still blank",
+   * and tempts people to delete the line and forget it exists.
+   *
+   * A required variable still fails, but now says "required" rather than
+   * "too small", which is the truth.
+   */
+  const present = Object.fromEntries(
+    Object.entries(raw).filter(([, v]) => v !== ''),
+  );
+
+  const parsed = envSchema.safeParse(present);
 
   if (!parsed.success) {
     const problems = parsed.error.issues

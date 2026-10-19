@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { Resend } from 'resend';
 
 import type { Env } from '../config/env.schema.js';
@@ -7,37 +8,88 @@ import type { Env } from '../config/env.schema.js';
 /**
  * Sending email.
  *
- * Resend when a key is configured, the console when it is not, and a hard
- * refusal in production with neither — because a deploy that silently logged
- * sign-in codes instead of mailing them would be a breach rather than a bug.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  Three transports, chosen in this order: SMTP, Resend, the console.
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * Amazon SES is the standing fallback in the design: two independent senders,
- * because a capsule that arrives is the product and one vendor's bad afternoon
- * must not be the reason it does not. The seam for it is `send()`; there is no
- * point writing the fallback before the primary has ever been exercised.
+ * SMTP first because it is the lowest common denominator — ZeptoMail, SES,
+ * Postmark and every other provider speak it, so changing vendor is an edit
+ * to `.env` rather than to this file. Resend stays as the HTTP alternative.
+ *
+ * Two independent senders because a capsule that arrives IS the product, and
+ * one vendor's bad afternoon must not be the reason it does not.
+ *
+ * With neither configured: the console in development, and a hard refusal in
+ * production, because a deploy that silently logged sign-in codes instead of
+ * mailing them would be a breach rather than a bug.
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
-  private readonly resend: Resend | null;
+  private readonly smtp: Transporter | null = null;
+  private readonly resend: Resend | null = null;
   private readonly from: string;
   private readonly isProduction: boolean;
 
   constructor(config: ConfigService<Env, true>) {
-    const apiKey = config.get('RESEND_API_KEY', { infer: true });
-
     this.from = config.get('MAIL_FROM', { infer: true });
     this.isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
-    this.resend = apiKey ? new Resend(apiKey) : null;
 
-    if (this.resend) {
+    const host = config.get('SMTP_HOST', { infer: true });
+    const user = config.get('SMTP_USERNAME', { infer: true });
+    const pass = config.get('SMTP_PASSWORD', { infer: true });
+    const apiKey = config.get('RESEND_API_KEY', { infer: true });
+
+    if (host) {
+      const port = config.get('SMTP_PORT', { infer: true });
+
+      // 465 is implicit TLS; everything else negotiates STARTTLS. Either way
+      // the session is encrypted — `requireTLS` means nodemailer aborts
+      // rather than continuing in plaintext if the server will not upgrade.
+      const secure = config.get('SMTP_SECURE', { infer: true }) ?? port === 465;
+
+      this.smtp = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        requireTLS: !secure,
+        auth: user && pass ? { user, pass } : undefined,
+      });
+
+      this.logger.log(`Email will be sent by SMTP via ${host}:${port} as ${this.from}`);
+    } else if (apiKey) {
+      this.resend = new Resend(apiKey);
       this.logger.log(`Email will be sent through Resend as ${this.from}`);
     }
   }
 
   get configured(): boolean {
-    return this.resend !== null;
+    return this.smtp !== null || this.resend !== null;
+  }
+
+  /**
+   * Prove the credentials before a user depends on them.
+   *
+   * SMTP authentication fails at SEND time, which without this means the
+   * first thing to discover a wrong password is somebody trying to sign in.
+   * Called at startup; it logs and returns rather than throwing, because a
+   * mail outage must not take the whole API down with it.
+   */
+  async verify(): Promise<boolean> {
+    if (!this.smtp) return this.resend !== null;
+
+    try {
+      await this.smtp.verify();
+      this.logger.log('SMTP credentials accepted');
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `SMTP refused the connection: ${(error as Error).message}. ` +
+          'Sign-in emails will fail until this is fixed.',
+      );
+      return false;
+    }
   }
 
   async sendSignInCode(
@@ -47,11 +99,12 @@ export class MailService {
   ): Promise<void> {
     const minutes = Math.round(ttlSeconds / 60);
 
-    if (!this.resend) {
+    if (!this.configured) {
       if (this.isProduction) {
         // Failing loudly is the point.
         throw new Error(
-          'RESEND_API_KEY is not set. Refusing to log a sign-in code in production.',
+          'No mail transport is configured (set SMTP_HOST or RESEND_API_KEY). ' +
+            'Refusing to log a sign-in code in production.',
         );
       }
 
@@ -68,33 +121,48 @@ export class MailService {
       return;
     }
 
-    const { error } = await this.resend.emails.send({
+    /**
+     * The code is in the SUBJECT as well as the body, deliberately.
+     *
+     * It means the notification on a locked phone already shows it, which
+     * removes a whole app-switch from a flow somebody does while holding a
+     * child. iOS and Android both offer it for autofill from there.
+     */
+    const subject = `${code} is your Moments & Memories code`;
+
+    const text = [
+      `Your sign-in code is ${code}.`,
+      ``,
+      `It expires in ${minutes} minutes and can be used once.`,
+      ``,
+      `If you did not ask to sign in, you can ignore this email — somebody`,
+      `typed your address by mistake, and without this code it does nothing.`,
+    ].join('\n');
+
+    const html = this.codeHtml(code, minutes);
+
+    if (this.smtp) {
+      try {
+        await this.smtp.sendMail({ from: this.from, to: email, subject, text, html });
+      } catch (error) {
+        // Surfaced, never swallowed: a sign-in that silently fails to send is
+        // a user staring at a screen that will never change.
+        const message = (error as Error).message;
+        this.logger.error(`SMTP refused the message: ${message}`);
+        throw new Error(`Email delivery failed: ${message}`);
+      }
+      return;
+    }
+
+    const { error } = await this.resend!.emails.send({
       from: this.from,
       to: email,
-      subject: `${code} is your Moments & Memories code`,
-
-      /**
-       * The code is in the SUBJECT as well as the body, deliberately.
-       *
-       * It means the notification on a locked phone already shows it, which
-       * removes a whole app-switch from a flow somebody does while holding a
-       * child. iOS and Android both offer it for autofill from there.
-       */
-      text: [
-        `Your sign-in code is ${code}.`,
-        ``,
-        `It expires in ${minutes} minutes and can be used once.`,
-        ``,
-        `If you did not ask to sign in, you can ignore this email — somebody`,
-        `typed your address by mistake, and without this code it does nothing.`,
-      ].join('\n'),
-
-      html: this.codeHtml(code, minutes),
+      subject,
+      text,
+      html,
     });
 
     if (error) {
-      // Surfaced, never swallowed: a sign-in that silently fails to send is a
-      // user staring at a screen that will never change.
       this.logger.error(`Resend refused the message: ${error.message}`);
       throw new Error(`Email delivery failed: ${error.message}`);
     }

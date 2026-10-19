@@ -2500,7 +2500,7 @@ what happens when those are absent, wrong, or lying.
 
 | Provider | Unset in development | Unset in production |
 |---|---|---|
-| `RESEND_API_KEY` | the sign-in code prints to the terminal | **throws.** A deploy that logged sign-in codes instead of mailing them is a breach, not a degraded mode |
+| mail (`SMTP_HOST`, else `RESEND_API_KEY`) | the sign-in code prints to the terminal | **throws.** A deploy that logged sign-in codes instead of mailing them is a breach, not a degraded mode |
 | R2 (four variables) | `POST /uploads` answers `409` | same `409` — storage is simply not available |
 
 That asymmetry is deliberate. A missing mail key must never fail quietly,
@@ -2580,6 +2580,83 @@ gitignored, and nothing env-shaped has ever been committed.
 
 ---
 
+## 25 · Real email, by SMTP
+
+```bash
+cd backend
+npm install              # adds nodemailer
+npm run start:dev        # logs which transport it chose, then verifies it
+```
+
+Expected at startup:
+
+```
+[MailService] Email will be sent by SMTP via smtp.zeptomail.in:587 as ...
+[MailService] SMTP credentials accepted
+```
+
+### Three transports, chosen in this order
+
+| Order | Transport | When |
+|---|---|---|
+| 1 | SMTP | `SMTP_HOST` is set |
+| 2 | Resend | no `SMTP_HOST`, but `RESEND_API_KEY` is set |
+| 3 | the console | neither — **development only** |
+
+SMTP first because it is the lowest common denominator. ZeptoMail, SES,
+Postmark and Mailgun all speak it, so changing vendor is an edit to `.env`
+rather than to the code. Resend stays as the HTTP alternative: two independent
+senders, because a capsule that arrives IS the product and one vendor's bad
+afternoon must not be the reason it does not.
+
+With neither configured, production **throws**. Development prints the code to
+the terminal, which is also what the integration suites read it back from.
+
+### The credentials are proved at startup
+
+`MailService.verify()` runs from `main.ts`. SMTP authentication otherwise
+fails at *send* time, which means the first thing to discover a wrong password
+is a user watching for a code that never arrives.
+
+It logs and returns rather than throwing. A mail outage must not also take
+down reading the archive — those are unrelated failures, and collapsing them
+into one makes a small problem into an outage.
+
+### An empty variable now means unset
+
+`R2_ACCESS_KEY_ID=` with nothing after it used to fail an **optional**
+variable's `min(1)` and refuse to boot — a confusing way to say "still blank",
+and one that tempts people to delete the line and forget the setting exists.
+`validateEnv` strips empty values before parsing, so a placeholder waiting to
+be filled in behaves as absent. A *required* variable still fails, but now
+says "required" rather than "too small".
+
+### The test suite can no longer reach a provider
+
+```ts
+// test/support/setup-env.ts
+delete process.env.SMTP_HOST;
+delete process.env.SMTP_USERNAME;
+delete process.env.SMTP_PASSWORD;
+delete process.env.RESEND_API_KEY;
+```
+
+> **This is a sender-reputation guard, not tidiness.** The auth suites sign in
+> as `aarav@example.com`, `bina@example.com` and a dozen other addresses that
+> do not exist. With SMTP configured in `.env` — which it is, for local
+> development — running the suite sends real mail to every one of them, and a
+> provider measures an account by how much of what it sends bounces. An
+> afternoon of `npm run test:e2e` is enough to get a sending domain suspended.
+
+Stripped in the setup file rather than guarded inside `MailService`, for the
+same reason the database URLs are rewritten there: it is the only point early
+enough to be unconditional, and a suite written next month cannot forget it.
+
+Object storage needs no equivalent — the archive suite replaces
+`StorageService` outright.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -2629,8 +2706,11 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 
 | Variable | Required | Notes |
 |---|---|---|
-| `RESEND_API_KEY` | no (dev) | Unset: codes print to the terminal. **In production, unset is a hard refusal** rather than a fallback |
-| `MAIL_FROM` | no | Must be a domain verified with the provider. `onboarding@resend.dev` works before yours is, but only sends to your own account address |
+| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USERNAME` · `SMTP_PASSWORD` | no (dev) | **Tried first.** Any provider: ZeptoMail, SES, Postmark. `SMTP_PORT` defaults to 587 |
+| `SMTP_SECURE` | no | Implicit TLS from the first byte. Derived from the port (`true` for 465); otherwise STARTTLS, and the connection aborts rather than falling back to plaintext |
+| `RESEND_API_KEY` | no (dev) | The HTTP alternative, used only when `SMTP_HOST` is unset |
+| **neither of the above** | — | Codes print to the terminal in development. **In production this is a hard refusal**, not a degraded mode |
+| `MAIL_FROM` | no | Must be a domain verified with the provider, and must match the account the SMTP credentials belong to |
 | `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET` | upload only | Cloudflare R2. The token should be scoped **Object Read & Write on that bucket alone** |
 | `R2_ENDPOINT` | no | For anything S3-compatible that is not R2 — MinIO locally, or S3 later. Derived from the account id when absent |
 | `MEDIA_URL_TTL_SECONDS` | no | **300, and a security parameter.** It is the bound on how long a revoked share can still be opened. Ceiling 900 |
