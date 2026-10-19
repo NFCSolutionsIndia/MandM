@@ -2657,6 +2657,89 @@ Object storage needs no equivalent — the archive suite replaces
 
 ---
 
+## 26 · Testing every endpoint by hand
+
+```bash
+cd backend
+npm run start:dev
+npm run dev:code -- someone@example.com     # recover a sign-in code
+```
+
+Import `Docs/development/MandM.postman_collection.json` into Postman. 25
+requests in six folders, and the tokens wire themselves together — each
+sign-in request captures what the next one needs, so nothing is copied by
+hand.
+
+### The route prefix is not what the controllers say
+
+`@Controller('admin/v1/auth')` plus a global `api/v1` prefix gives:
+
+```
+/api/v1/admin/v1/auth/request-code
+```
+
+Redundant, and it is the real contract — `admin/src/app/login/actions.ts`
+calls exactly that. Only `/health` and `/health/ready` are excluded from the
+prefix. Worth tidying one day, but changing it breaks the console, so it is
+written down rather than quietly fixed.
+
+### Getting a sign-in code
+
+Codes are SHA-256 in `email_otps` and cannot be read back — not by an
+attacker holding the database, and not by you. `npm run dev:code` recovers one
+by trying all million six-digit strings against the stored digest, which takes
+about a second. It is the same thing the integration suites do.
+
+It connects as the **owner** role deliberately: `mm_app` cannot select from
+`email_otps` at all, which is the correct answer to "can the API read anybody's
+sign-in code".
+
+> A code is spent the moment a newer one is issued for the same address, so
+> request, recover, and verify without detouring.
+
+### Requesting a code returns 500 when mail is broken
+
+Not a bug, and not an enumeration leak — it fails identically for every
+address. The code **is** still issued, so `npm run dev:code` works even when
+delivery does not, which is what makes Postman usable before DNS is sorted.
+
+### The admin realm needs an account and an enrolment
+
+Staff cannot self-register; there is no sign-up endpoint by design.
+
+```bash
+docker exec mm-postgres psql -U postgres -d mm_dev -c \
+  "INSERT INTO admin_users (id, email, role_id)
+   SELECT uuid_generate_v7(), 'admin@example.com', r.id FROM roles r WHERE r.name='support';"
+```
+
+First `verify-email` returns an `enrolment` block — a TOTP secret, an otpauth
+URI and eight backup codes. **Shown once, never recoverable**: re-enrolment is
+refused while a secret exists, because anybody holding a first-factor token
+could otherwise replace the second factor with one of their own. Lose it and
+delete the row to start again.
+
+The two factors are separate tokens. `verify-email` returns an `mfaToken` that
+can do exactly one thing — present a TOTP code. It opens no other admin route.
+
+### What to check, beyond 200s
+
+| Request | Expect | Because |
+|---|---|---|
+| `request-code` for an unknown address | **202** | a 404 here is an account-enumeration oracle |
+| `verify` with a wrong code | **401**, same as expired | distinguishing them tells an attacker which half was right |
+| `/auth/me` with no token | **401** | the global guard, not the handler |
+| admin `dashboard` with a **customer** token | **401** | the realms share no credentials |
+| `uploads/:id/complete` without the PUT | **409** | the server HEADs the object; it does not take your word |
+| `media/:id/url`, then strip the query string | **400** from R2 | the bucket is private; the signature is the credential |
+| another user's `vaultId` | **404**, not 403 | "forbidden" would confirm the vault exists |
+
+That last row is the one worth re-reading. Row-level security has already
+decided the row does not exist for this caller, and `src/common/pg-errors.ts`
+maps the refusal to 404 so the answer does not contradict the policy.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace

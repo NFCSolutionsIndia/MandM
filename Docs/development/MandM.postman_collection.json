@@ -1,0 +1,978 @@
+{
+  "info": {
+    "name": "Moments & Memories",
+    "description": "Every endpoint the product exposes, in the order you would exercise them.\n\nThree realms, and they do not share credentials:\n  • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer)\n  • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)\n  • Health      — /health          no auth\n\nTokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.\n\nSign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000"
+    },
+    {
+      "key": "email",
+      "value": "you@example.com"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "code",
+      "value": ""
+    },
+    {
+      "key": "totp",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "mfaToken",
+      "value": ""
+    },
+    {
+      "key": "vaultId",
+      "value": ""
+    },
+    {
+      "key": "memoryId",
+      "value": ""
+    },
+    {
+      "key": "uploadId",
+      "value": ""
+    },
+    {
+      "key": "assetId",
+      "value": ""
+    },
+    {
+      "key": "uploadUrl",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0 · Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "No auth, and deliberately so: a guard here would make every container fail its health check and roll the deploy back."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /health/ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Readiness: this one touches the database. Use it to confirm the pool is actually up before blaming an endpoint."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1 · Mobile API — sign in",
+      "item": [
+        {
+          "name": "POST /auth/request-code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/request-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "request-code"
+              ]
+            },
+            "description": "Always 202, for any address.\n\nThat is the whole point: a 404 for unknown addresses would turn this into a way to ask the server whether somebody has an account here. Creating an account and signing in are the same request — there is no separate sign-up."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('says nothing about whether the account exists', () => {",
+                  "  pm.expect(pm.response.json().status).to.include('If that address');",
+                  "});",
+                  "console.log('Now get the code: npm run dev:code -- ' + pm.collectionVariables.get('email'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify"
+              ]
+            },
+            "description": "Set the `code` variable first.\n\nOne flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.\n\nThe token in the response is the only time that value exists outside your client; the database keeps its SHA-256 and nothing else. This script captures it into {{token}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('token', b.token);",
+                  "pm.test('returned a session token', () => pm.expect(b.token).to.be.a('string'));",
+                  "console.log('isNewAccount:', b.isNewAccount, '| expires in days:', b.expiresInDays);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/verify — wrong code (expect 401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"000000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify"
+              ]
+            },
+            "description": "Worth running deliberately. Five of these spend the code entirely — the limit is enforced in the database, not here."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "The first endpoint that needs an actor. If this works, the whole chain works: bearer token → app_resolve_session → ActorContext → SET LOCAL app.user_id → sixty row-level policies."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /auth/me — no token (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2 · Mobile API — vaults",
+      "item": [
+        {
+          "name": "POST /vaults",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Family\",\n  \"type\": \"shared\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults"
+              ]
+            },
+            "description": "type: personal | shared | legacy\n\nTwo writes in one transaction — the vault and the owner's membership row — so a vault with no members cannot exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('vaultId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /vaults",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /vaults/debug/row-counts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/debug/row-counts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "debug",
+                "row-counts"
+              ]
+            },
+            "description": "Proof that the boundary belongs to the database rather than to a handler: the counts are what THIS actor can see, not what the tables hold."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3 · Mobile API — archive",
+      "item": [
+        {
+          "name": "POST /vaults/:vaultId/memories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Aaji at the wedding\",\n  \"note\": \"She wore the green sari.\",\n  \"occurredAt\": \"1974-03-14T00:00:00Z\",\n  \"occurredPrecision\": \"year\",\n  \"clientId\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "memories"
+              ]
+            },
+            "description": "occurredAt is when it HAPPENED, not when it was uploaded — defaulting it to now is how a scanned 1974 photograph ends up filed under the Tuesday somebody digitised it.\n\noccurredPrecision: exact | day | month | year | decade\n\nclientId is the device's own id and makes a retry idempotent. {{$guid}} generates a fresh one; paste a fixed value instead to watch deduplicated flip to true."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('memoryId', b.id);",
+                  "console.log('deduplicated:', b.deduplicated);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /vaults/:vaultId/memories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "memories"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "before",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Keyset pagination, not offset: an offset shifts under you when somebody adds a memory mid-scroll, and this timeline is appended to constantly. Pass nextBefore back as `before`."
+          }
+        },
+        {
+          "name": "POST /uploads",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memoryId\": \"{{memoryId}}\",\n  \"filename\": \"photo.jpg\",\n  \"contentType\": \"image/jpeg\",\n  \"bytes\": 2400000,\n  \"kind\": \"image\",\n  \"clientId\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "uploads"
+              ]
+            },
+            "description": "Returns a URL you PUT the file to DIRECTLY. The bytes never pass through this server.\n\n`bytes` must match the file exactly — ContentLength is signed into the URL, so R2 rejects a body of a different size. kind: image | video | audio.\n\nThe quota is checked here, before a byte moves."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('uploadId', b.uploadId);",
+                  "pm.collectionVariables.set('uploadUrl', b.url);",
+                  "console.log('PUT the file to the url in uploadUrl, then run Complete.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT the file to R2 (direct)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "image/jpeg"
+              }
+            ],
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            },
+            "url": {
+              "raw": "{{uploadUrl}}"
+            },
+            "description": "Body → binary → select your file. It must be the SAME file whose size you declared, or R2 refuses the signature.\n\nNote there is no Authorization header: the signature in the URL is the credential, which is the whole reason this can go straight to Cloudflare."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 from R2', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /uploads/:uploadId/complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"image\",\n  \"contentType\": \"image/jpeg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/uploads/{{uploadId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "uploads",
+                "{{uploadId}}",
+                "complete"
+              ]
+            },
+            "description": "The server HEADs the object and records the size IT reports, not the one you declared.\n\n409 means the object is not in the bucket — you skipped the PUT, or it failed.\n413 means the object is bigger than the upload was opened for."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('assetId', pm.response.json().assetId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /media/:assetId/url",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/media/{{assetId}}/url",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "media",
+                "{{assetId}}",
+                "url"
+              ]
+            },
+            "description": "A signed GET, 300 seconds. That TTL is the bound on how long a revoked share can still be opened, which is why it is capped at 900 in the schema rather than left to taste.\n\nOpen the url in a browser to see the file. Strip the query string and it fails — the bucket is private."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('short-lived', () => pm.expect(pm.response.json().expiresInSeconds).to.be.at.most(900));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4 · Mobile API — sessions",
+      "item": [
+        {
+          "name": "POST /auth/sign-out-others",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/sign-out-others",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-out-others"
+              ]
+            },
+            "description": "Revokes every session except the one making the request. Run this BEFORE sign-out, or you will have nothing left to call it with."
+          }
+        },
+        {
+          "name": "POST /auth/sign-out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/sign-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sign-out"
+              ]
+            },
+            "description": "After this, every request above returns 401 until you sign in again."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5 · Admin panel",
+      "item": [
+        {
+          "name": "POST /admin/v1/auth/request-code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/auth/request-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "auth",
+                "request-code"
+              ]
+            },
+            "description": "Also always 202, so this cannot be used to enumerate staff.\n\nThe address must already exist in admin_users — there is no self-signup for staff, by design."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "console.log('npm run dev:code -- ' + pm.collectionVariables.get('adminEmail'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /admin/v1/auth/verify-email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"code\": \"{{code}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Factor one. The mfaToken it returns can do exactly ONE thing — present a TOTP code. It reaches no other admin route.\n\nOn a first sign-in the response also carries `enrolment`, containing the TOTP secret and otpauth URI. It is shown once and is never recoverable: re-enrolment is refused once a secret exists, because otherwise anybody holding a first-factor token could replace the second factor with one of their own."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('mfaToken', b.mfaToken);",
+                  "if (b.enrolment) {",
+                  "  console.log('ENROL NOW — shown once:', JSON.stringify(b.enrolment));",
+                  "  console.log('Add the otpauth URI to your authenticator app.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /admin/v1/auth/verify-totp",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{mfaToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{totp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/auth/verify-totp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "auth",
+                "verify-totp"
+              ]
+            },
+            "description": "Factor two. Note the Authorization header carries the mfaToken, not a session.\n\nSet `totp` to the six digits from your authenticator. The admin session lasts 8 hours, not the 30 days a customer gets."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('adminToken', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /admin/v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /admin/v1/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "dashboard"
+              ]
+            },
+            "description": "Everything the console's home screen draws. Run `npm run seed:dev` first or the numbers are all zero.\n\nWorth noticing what is NOT here: no capsule contents. The console connects as mm_admin, which has a column-level grant letting it count capsules and read unlock_at, but no SELECT on sender_note at all. Operations can see that a capsule exists without reading what somebody wrote to their daughter."
+          }
+        },
+        {
+          "name": "GET /admin/v1/dashboard — with a CUSTOMER token (expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "dashboard"
+              ]
+            },
+            "description": "The realms do not share credentials. A customer session must never open a staff door, and this proves it."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /admin/v1/auth/sign-out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/auth/sign-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "auth",
+                "sign-out"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
