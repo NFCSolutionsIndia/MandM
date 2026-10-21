@@ -2740,6 +2740,74 @@ maps the refusal to 404 so the answer does not contradict the policy.
 
 ---
 
+## 27 · Who may sign in to the console
+
+```bash
+cd backend
+npm run admin -- list
+npm run admin -- grant someone@company.com [role]
+npm run admin -- revoke someone@company.com
+npm run admin -- restore someone@company.com
+npm run admin -- reset-mfa someone@company.com
+```
+
+### There is no way to become staff from outside
+
+Grep confirms it: nothing in `src/` inserts into `admin_users`. No sign-up, no
+invite endpoint, and **no admin can promote anybody — not even to their own
+role**. Becoming staff requires database access, so it requires the people who
+hold the database.
+
+An "invite an admin" button is a button that an attacker who takes one console
+session gets to press.
+
+### Four gates, and three of them are in the database
+
+| Gate | Where | Verified |
+|---|---|---|
+| A row in `admin_users` | `app_admin_redeem_code` | a non-staff address with a valid code → **401** |
+| `is_active` | same function, `WHERE a.email = p_email AND a.is_active` | same correct code: **401** revoked, **200** active |
+| Email code, 10 min, 5 attempts | same function | — |
+| TOTP second factor | `app_admin_complete_mfa` | first factor alone reaches no admin route |
+
+Only the first factor is checked in application code; the rest live in the
+database function, so they hold however the handler is rewritten.
+
+> Anonymous access was measured, not assumed: `/dashboard` and `/auth/me`
+> return **401** with no token, a junk token, and an empty bearer alike.
+
+### Revoke deactivates, and it must
+
+`moderation_flags.reviewed_by` and `break_glass_access.admin_id` are both
+**ON DELETE RESTRICT**, so PostgreSQL refuses to delete an admin who has ever
+reviewed a flag or opened a vault under break-glass.
+
+That refusal is the feature. Deleting staff would erase who approved what, and
+the audit trail is the only thing that makes those powers accountable.
+
+`revoke` therefore sets `is_active = false` **and revokes their live
+sessions** — otherwise somebody dismissed on Monday keeps a working console
+until their eight-hour session lapses. Confirmed: their existing token returns
+401 immediately.
+
+### The second factor cannot be re-enrolled
+
+`app_admin_enrol_totp` refuses while a secret exists, because anybody holding
+a first-factor token could otherwise replace the second factor with one of
+their own — which would make it decorative.
+
+So a lost phone is `reset-mfa`, deliberately an operation on the database
+rather than a "resend" link in an email.
+
+### Roles
+
+One role exists, `support`, with one permission, `users:read`. Permissions
+hang directly off `roles` — there is no join table — so a new role is a row in
+`roles` plus rows in `permissions`. `grant` refuses a role that does not
+exist rather than creating one by accident.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace

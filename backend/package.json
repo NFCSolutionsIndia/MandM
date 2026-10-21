@@ -27,7 +27,8 @@
     "seed:dev": "tsx scripts/seed-dev.ts",
     "worker:dev": "nest start --watch --entryFile worker.main",
     "worker:prod": "node dist/worker.main.js",
-    "dev:code": "tsx scripts/dev-code.ts"
+    "dev:code": "tsx scripts/dev-code.ts",
+    "admin": "tsx scripts/admin-access.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
