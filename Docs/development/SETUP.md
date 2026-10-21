@@ -2924,6 +2924,119 @@ somewhere the application's own credentials cannot reach.
 
 ---
 
+## 29 · Capsules — the thing the product is for
+
+```bash
+cd backend
+npm run db:migrate      # 0016 adds app_open_capsule()
+npm run test:e2e        # 208 tests, 14 suites
+```
+
+Until this step the schema had capsules, the policies guarded them and the
+worker stood ready to deliver them. Nothing could create one. The delivery
+engine was wired to an empty queue.
+
+### The sender's side
+
+```
+POST   /vaults/:vaultId/capsules          a draft
+PATCH  /capsules/:capsuleId               edit, while allowed
+POST   /capsules/:capsuleId/recipients    returns the access token ONCE
+DELETE /capsules/:capsuleId/recipients/:recipientId
+POST   /capsules/:capsuleId/memories      attach, idempotent
+POST   /capsules/:capsuleId/seal          the moment
+POST   /capsules/:capsuleId/cancel        withdraw
+GET    /vaults/:vaultId/capsules
+GET    /capsules/:capsuleId
+```
+
+### Sealing and scheduling commit together
+
+A capsule sealed without a job is a promise nothing will ever keep: it sits in
+the table looking perfect and simply never arrives. Both writes are in one
+transaction, so either the promise and its delivery both exist or neither
+does.
+
+Refused at seal, rather than discovered later:
+
+| Refusal | Why here |
+|---|---|
+| no recipients → **400** | the worker throws on an empty list, which costs five days of day-scale backoff before anybody sees a Sev-0 — for a mistake visible the moment seal was pressed |
+| unlock time in the past → **400** | a date that has already gone will never fire |
+| already sealed → **409** | |
+| not the owner → **403** | the UPDATE policy would refuse it silently, and "nothing happened" is a poor answer to "I sealed my capsule" |
+| plan limits | `app_sealing_entitlement()`, which counts **concurrent obligations**, never lifetime usage |
+
+> No subscription row means no limits are recorded, and the honest response is
+> to allow it rather than invent a free-tier number here. Billing is not
+> provisioned; when it is, this already enforces.
+
+`milestone` without a resolved date and `manual` capsules seal but are **not**
+enqueued — there is nothing to schedule them for yet. The response says
+`scheduled: false` rather than leaving somebody to discover it by waiting.
+
+### editable_until never outlives the unlock
+
+```sql
+editable_until = LEAST(now() + interval '15 minutes', COALESCE(unlock_at, 'infinity'))
+```
+
+`LEAST` is the whole point. A capsule unlocking in two minutes with a
+fifteen-minute grace window would otherwise still be editable while the worker
+was delivering it — the sender rewriting the message as it was being read.
+
+Fifteen minutes is for "I spelled her name wrong", not for second thoughts. A
+promise you may rewrite for a week is not a promise. **Cancelling stays
+possible after sealing; editing does not**, and that distinction is the
+product.
+
+The freeze itself is `capsule_freeze()` from migration 0005, not a check in
+the handler — so it holds for every writer, including a future admin tool or a
+migration script. It raises `23514`, which `pg-errors.ts` turns into a 400.
+
+### The recipient has no account, and that is the design
+
+```
+GET  /open/:token
+POST /open/:token/reply
+```
+
+`@Public()`, deliberately. The person opening a capsule may have been eleven
+when it was written, and may be reading it because the sender has died.
+Requiring them to sign up first would put a registration form between a child
+and a message from their mother.
+
+**This is where the first implementation was wrong.** Every policy in the
+schema resolves through `app_current_user()`, and a recipient has no actor —
+so reading the capsule through the ordinary connection returned nothing.
+Correctly. The tests caught it; migration 0016 adds `app_open_capsule()`,
+SECURITY DEFINER, with the token as the entire credential:
+
+- It refuses any capsule not already `delivered` or `opened`, so **a token
+  that leaks years early opens nothing**. There is no window to read ahead.
+- It records the opening in the same call that returns the content, so a read
+  cannot forget to.
+- `COALESCE` on both timestamps keeps the **first** opening. Overwriting on
+  every refresh would replace "she opened it on her eighteenth birthday" with
+  "she last looked at it on a Tuesday".
+
+A bad token, an unknown token and an undelivered capsule all return the same
+flat **404** — so the holder of a bad token learns nothing.
+
+### The access token is shown once
+
+Minted when the recipient is added, returned once, and only its SHA-256 ever
+reaches the database — so a leaked backup does not hand over every sealed
+message in the system. Reading the capsule back never returns it again, which
+the tests assert.
+
+> **Still open:** the worker does not yet put a link in the delivery message.
+> `token_version` exists for exactly this — at delivery time it should mint a
+> fresh token, store the new hash and send the raw one, so the credential
+> lives only in the message. Today the sender receives it and shares it.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace

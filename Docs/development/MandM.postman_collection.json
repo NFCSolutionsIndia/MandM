@@ -56,6 +56,18 @@
     {
       "key": "uploadUrl",
       "value": ""
+    },
+    {
+      "key": "capsuleId",
+      "value": ""
+    },
+    {
+      "key": "recipientId",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
     }
   ],
   "item": [
@@ -658,6 +670,371 @@
               }
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "3b · Mobile API — capsules",
+      "item": [
+        {
+          "name": "POST /vaults/:vaultId/capsules",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"For your eighteenth\",\n  \"note\": \"You were asleep on my shoulder when I wrote this.\",\n  \"unlockKind\": \"datetime\",\n  \"unlockAt\": \"2044-03-01T09:00:00Z\",\n  \"unlockTimezone\": \"Asia/Kolkata\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "capsules"
+              ]
+            },
+            "description": "Creates a DRAFT. unlockAt is when it opens; unlockTimezone is the zone the sender meant, kept separately so a message for a daughter in Pune scheduled from London does not arrive at 03:00 her time.\n\nunlockKind: datetime | milestone | manual"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201',()=>pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('capsuleId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /capsules/:id/recipients",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Aarti\",\n  \"email\": \"aarti@example.com\",\n  \"preferredChannel\": \"email\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/recipients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "recipients"
+              ]
+            },
+            "description": "Returns accessToken ONCE. Only its SHA-256 reaches the database, so a leaked backup does not hand over every sealed message.\n\nHolding it early is harmless — it opens nothing until the capsule is actually delivered."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201',()=>pm.response.to.have.status(201));",
+                  "const b=pm.response.json();",
+                  "pm.collectionVariables.set('recipientId', b.id);",
+                  "pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "console.log('Access token captured — it is never returned again.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /capsules/:id/memories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"memoryIds\": [\n    \"{{memoryId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/memories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "memories"
+              ]
+            },
+            "description": "Idempotent — the primary key makes a retry a no-op. Send twice and watch added drop to 0 while total stays the same."
+          }
+        },
+        {
+          "name": "POST /capsules/:id/seal  ← the moment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/seal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "seal"
+              ]
+            },
+            "description": "Seals the capsule AND schedules its delivery in ONE transaction. A capsule sealed without a job is a promise nothing will ever keep.\n\n400 no recipients · 400 unlock time already passed · 409 already sealed · 403 not the owner\n\nscheduled:false means it was sealed but has no date yet (milestone or manual)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test('sealed',()=>pm.expect(b.state).to.eql('sealed'));",
+                  "pm.test('delivery scheduled',()=>pm.expect(b.scheduled).to.be.true);",
+                  "console.log('editable until', b.editableUntil);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /capsules/:id — after the grace window (expect 400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Actually, I changed my mind about all of it.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}"
+              ]
+            },
+            "description": "Inside the 15-minute grace window this succeeds. After it, capsule_freeze() raises 23514 and you get 400.\n\nThe freeze is a database trigger, not a check in the handler — it holds for every writer, including an admin tool or a migration script."
+          }
+        },
+        {
+          "name": "GET /capsules/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}"
+              ]
+            },
+            "description": "The capsule with its recipients and memories. The access token is NOT here, in any form."
+          }
+        },
+        {
+          "name": "GET /vaults/:vaultId/capsules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "capsules"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "state",
+                  "value": "sealed",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /open/:token — before delivery (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/open/{{accessToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "open",
+                "{{accessToken}}"
+              ]
+            },
+            "description": "NO Authorization header — that is the point. The recipient may have been eleven when this was written and may have no account.\n\nBefore delivery this is 404. A wrong token is the same flat 404, so a bad token learns nothing."
+          }
+        },
+        {
+          "name": "GET /open/:token — after delivery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/open/{{accessToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "open",
+                "{{accessToken}}"
+              ]
+            },
+            "description": "Works once state is delivered. To try it now, mark it delivered by hand:\n\n  docker exec mm-postgres psql -U postgres -d mm_dev -c \\\"UPDATE capsules SET state='delivered', delivered_at=now() WHERE id='<capsuleId>';\\\"\n\nRecords the FIRST opening only — refresh and firstOpenedAt does not move."
+          }
+        },
+        {
+          "name": "POST /open/:token/reply",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"I read it on the morning of my birthday. Thank you.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/open/{{accessToken}}/reply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "open",
+                "{{accessToken}}",
+                "reply"
+              ]
+            },
+            "description": "The reply the sender may never read. Goes through app_post_reply(), which refuses any capsule not delivered or opened."
+          }
+        },
+        {
+          "name": "POST /capsules/:id/cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "cancel"
+              ]
+            },
+            "description": "Withdraw the promise. Allowed after sealing, unlike editing: a promise you may silently rewrite is not a promise, but a person must always be able to stop something being sent.\n\nThe job is NOT deleted — the worker completes it without sending, keeping the record that something was scheduled and then withdrawn."
+          }
         }
       ]
     },

@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 
 import { AdminModule } from './admin/admin.module.js';
 import { ArchiveModule } from './archive/archive.module.js';
+import { CapsulesModule } from './capsules/capsules.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { validateEnv } from './config/env.schema.js';
@@ -45,6 +46,7 @@ import { VaultsModule } from './vaults/vaults.module.js';
     AdminModule,
     VaultsModule,
     ArchiveModule,
+    CapsulesModule,
     HealthModule,
   ],
   providers: [
