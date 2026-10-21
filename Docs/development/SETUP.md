@@ -2808,6 +2808,122 @@ exist rather than creating one by accident.
 
 ---
 
+## 28 · Dumps: backups, sharing, and why the server does not use one
+
+### Do not provision a server from a dump
+
+The server gets its schema from the **migrations**, not from a copy of
+somebody's laptop:
+
+```bash
+# on the server, once
+docker exec mm-postgres psql -U postgres -c "CREATE DATABASE mm_prod;"
+docker exec mm-postgres psql -U postgres -d mm_prod -f roles.sql   # see below
+cd backend && npm run db:migrate
+```
+
+A restored dump looks complete and is not. Measured on a schema-only restore
+of `mm_dev`:
+
+| | source | restored |
+|---|---|---|
+| tables | 40 | 40 |
+| policies | 103 | 103 |
+| functions | 116 | 116 |
+| **`drizzle.__drizzle_migrations` rows** | **16** | **0** |
+
+Everything is there except the record that it is there. The next
+`npm run db:migrate` therefore believes nothing has ever been applied and
+tries to replay all sixteen against a schema that already has them. In
+testing it did not fail cleanly — it hung without committing a single row.
+
+> A dump is a photograph of a database. The migrations are the instructions
+> for building one, and only the instructions can be applied again next month.
+
+### Roles must exist before any restore
+
+A dump of this schema names `mm_app`, `mm_worker` and `mm_admin` **259 times**
+in `CREATE POLICY ... TO <role>` and `GRANT` statements. On a machine where
+those roles do not exist:
+
+```
+ERROR:  role "mm_app" does not exist
+```
+
+`pg_dump` of a single database does not include roles — they are cluster-wide.
+Create them first:
+
+```sql
+-- roles.sql
+CREATE ROLE mm_app   NOLOGIN;
+CREATE ROLE mm_worker NOLOGIN;
+CREATE ROLE mm_admin  NOLOGIN;
+-- then per environment, with real passwords:
+ALTER ROLE mm_app    WITH LOGIN PASSWORD '...';
+```
+
+Or carry them across with `pg_dumpall --roles-only`.
+
+### Never send a data dump to another developer
+
+A full dump of this product contains every user's email address, every
+memory's note, and the `sender_note` of sealed capsules — letters people wrote
+to their children to be opened in 2046. That is the one thing the whole
+schema exists to protect, and column-level grants stop even the admin console
+reading it.
+
+Give them the **schema and a seed** instead:
+
+```bash
+docker exec mm-postgres pg_dump -U postgres -d mm_dev --schema-only > schema.sql
+# they restore it, then:
+cd backend && npm run seed:dev     # 240 users, 300 capsules, invented
+```
+
+Better still, they clone the repo and run `npm run db:migrate` — then they
+have the migration history too, and no dump changes hands at all.
+
+### Taking a dump in DBeaver
+
+Right-click the **database** (not the connection) → **Tools → Backup**.
+
+- **Format:** `Plain` for something readable or sharable; `Custom` if you want
+  `pg_restore` with selective restore.
+- **schema only / data only:** on the first page. Schema-only is what you
+  share; both is what you back up.
+- Uncheck **Use SQL INSERT instead of COPY** unless the target is not
+  PostgreSQL — `COPY` restores far faster.
+
+> **DBeaver shells out to a local `pg_dump`.** If it is older than the server
+> you get `server version mismatch` and nothing is written. Point
+> **Preferences → Database → Client → PostgreSQL** at a **17** client, or skip
+> DBeaver and use the container's own binary, which always matches:
+
+```bash
+docker exec mm-postgres pg_dump -U postgres -d mm_dev --schema-only > schema.sql
+docker exec mm-postgres pg_dump -U postgres -d mm_dev -Fc > mm_dev.dump
+```
+
+> **In Git Bash**, prefix container paths with `MSYS_NO_PATHCONV=1` — otherwise
+> `/tmp/x.sql` is rewritten to a Windows path before Docker sees it, and psql
+> reports `No such file or directory` for a file that is plainly there.
+
+### The backup you actually need on a VPS
+
+Aurora does continuous backup with point-in-time recovery; a container does
+not. A nightly dump **off the machine**, and a restore proved once rather than
+discovered during an incident:
+
+```bash
+docker exec mm-postgres pg_dump -U postgres -d mm_prod -Fc \
+  | gzip > "mm_prod_$(date +%F).dump.gz"
+```
+
+That file is every secret in the product in one place. Encrypt it, and keep it
+somewhere the application's own credentials cannot reach.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
