@@ -120,6 +120,13 @@
       "when": 1792591996324,
       "tag": "0016_recipient_opens_capsule",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793343449137,
+      "tag": "0017_support_role",
+      "breakpoints": true
     }
   ]
 }
