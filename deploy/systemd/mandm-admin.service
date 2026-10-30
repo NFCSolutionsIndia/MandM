@@ -1,0 +1,14 @@
+[Unit]
+Description=M&M admin console
+After=network-online.target mandm-api.service
+
+[Service]
+User=mandm
+WorkingDirectory=/srv/mandm/current/admin
+Environment=NODE_ENV=production
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 4101
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -19,10 +19,11 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch makes the older run pointless.
+# A newer push to a branch makes the older run pointless — except on main,
+# where the older run may be halfway through a deploy.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -113,3 +114,49 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
+
+  # Every push to main that passes both jobs goes live.
+  #
+  # The key can run exactly one thing on the server — /usr/local/bin/mandm-deploy,
+  # pinned in authorized_keys — and the only thing it sends is the commit sha.
+  # The server builds that commit itself, migrates with a credential GitHub
+  # never sees, and rolls back if the new release fails its health check.
+  # SETUP.md section 31.
+  deploy:
+    name: Deploy
+    needs: [backend, admin]
+    # DEPLOY_ENABLED is a repository variable, set once the server side exists.
+    # Until then, and whenever deploys must pause, this job is skipped, not failed.
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    environment:
+      name: production
+      url: https://admin.72-61-173-62.sslip.io
+
+    # Deploys queue; one is never cancelled for another.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          # The server's own host key, pinned. Never ssh-keyscan at deploy
+          # time: that trusts whoever answers.
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            "mandm@$DEPLOY_HOST" "$GITHUB_SHA"

@@ -4,9 +4,10 @@ Every step taken to build this project from nothing, in order, with the reasonin
 kept short. Follow it top to bottom on a new machine or a server and you get an
 identical environment.
 
-**Status:** steps 1–23 complete. 40 tables, **four** database roles, both auth
-realms, a console you can sign in to, and **a delivery engine that runs** —
-171 integration tests.
+**Status:** steps 1–31 complete. 40 tables, **four** database roles, both auth
+realms, a console you can sign in to, a delivery engine that runs, capsules
+end to end — and **the first server, live** (section 30), deployed on every
+push to `main` once CI passes (section 31).
 
 ---
 
@@ -2806,6 +2807,12 @@ hang directly off `roles` — there is no join table — so a new role is a row 
 `roles` plus rows in `permissions`. `grant` refuses a role that does not
 exist rather than creating one by accident.
 
+`support` was first inserted by hand, which meant a database built from the
+migrations alone had no roles and nobody could be granted the console — the
+first server found it. Migration `0017_support_role` now creates it,
+idempotently. **A new role belongs in a migration too**, never in a hand-run
+`INSERT`.
+
 ---
 
 ## 28 · Dumps: backups, sharing, and why the server does not use one
@@ -3037,6 +3044,818 @@ the tests assert.
 
 ---
 
+## 30 · Hosting on a shared VPS
+
+The first server. Every command below was run on it, in this order, and the
+mistakes we made are written in at the step where they happened — they are the
+ones the next person will make too.
+
+| | This deployment |
+|---|---|
+| Server | `srv1126059`, Ubuntu 24.04, 8 vCPU, 31 GB, **shared** with other applications |
+| API | `https://api.72-61-173-62.sslip.io` |
+| Admin console | `https://admin.72-61-173-62.sslip.io` |
+| Code | `/srv/mandm/app`, owned by the `mandm` user |
+| Processes | systemd: `mandm-api` · `mandm-worker` · `mandm-admin` |
+| Database | its own container, `mandm-postgres`, on `127.0.0.1:5433`, database `mm_prod` |
+
+**The rule the whole section follows: this server already runs other
+applications, and nothing here may touch them.** No edited nginx site, no
+replaced Node, no shared database, no shared port, no restart of anything that
+is not ours.
+
+| Run as | Commands |
+|---|---|
+| **root** | `systemctl`, `journalctl`, `nginx`, `certbot`, `docker`, `crontab`, anything under `/etc` |
+| **mandm** | `git`, `npm`, `.env`, migrations, `npm run admin` |
+
+`mandm` has no `sudo`. Get to it with `sudo -iu mandm`, back with `exit`, and
+when unsure, `whoami`.
+
+### 30.1 · Survey first, read-only
+
+Nothing is installed until you know what is already there.
+
+```bash
+cat /etc/os-release | head -4; uname -m
+nproc; free -h; df -h /
+sudo ss -tlnp
+systemctl is-active nginx apache2 httpd caddy; ls /etc/nginx/sites-enabled /etc/nginx/conf.d
+docker --version; docker compose version; sudo docker ps --format '{{.Names}}\t{{.Ports}}'
+which node && node -v; which pm2 && pm2 ls
+systemctl is-active postgresql; which psql
+sudo ufw status
+which certbot && sudo certbot certificates | grep -E 'Certificate Name|Domains'
+```
+
+What it found, and what each finding decided:
+
+| Found | Decision |
+|---|---|
+| PostgreSQL already on `127.0.0.1:5432` | M&M gets its own container on **5433**. The other cluster is never connected to |
+| Port 3001 taken by another Next.js app (pm2) | API on **4100**, console on **4101** |
+| System Node **v20**, used by pm2 apps | Node 24 through **nvm, for `mandm` only**. `/usr/bin/node` is never touched |
+| pm2 running as root | Not used. M&M runs as systemd units under its own user |
+| nginx owns 80/443 with two sites | **One new site file**. The existing ones are never edited |
+| **`ufw` inactive** | Every M&M process binds `127.0.0.1`, so the only way in is through nginx |
+| No domain bought | **sslip.io** — see 30.11 |
+
+> `ufw` being off is why `HOST` exists (commit `2c2c6c6`). The API used to
+> bind `0.0.0.0` unconditionally: on this server that would have published
+> `:4100` to the internet beside nginx, and let a direct client forge the
+> `X-Forwarded-For` that `trustProxy` believes. `HOST` defaults to `0.0.0.0`,
+> so containers and laptops are unchanged.
+
+### 30.2 · A user of its own, and Node 24 for it alone
+
+```bash
+adduser --system --group --home /srv/mandm --shell /bin/bash mandm
+sudo -iu mandm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+```
+
+**`--system` creates a bare home: no `~/.bashrc`, no `~/.profile`.** nvm's
+installer reports *Profile not found* and loads nothing. Write both by hand —
+`.bashrc` loads nvm, and `.profile` loads `.bashrc`, because `sudo -iu` opens a
+*login* shell, which reads `.profile` and never `.bashrc`:
+
+```bash
+cat >> ~/.bashrc <<'EOF'
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+EOF
+echo '[ -f ~/.bashrc ] && . ~/.bashrc' >> ~/.profile
+source ~/.profile
+
+nvm install 24.11.1
+exit && sudo -iu mandm      # a fresh login proves it sticks
+which node                  # /srv/mandm/.nvm/versions/node/v24.11.1/bin/node
+exit
+node -v                     # as root: still v20 — the pm2 apps are unaffected
+```
+
+> Without the `.profile` line, `which node` in a fresh session answered
+> `/usr/bin/node` — v20 — and `npm ci` would have built against it.
+
+The installer also warns that pm2 and corepack are installed globally under the
+system Node. That is informational; nvm changed nothing there. **Do not run
+`npm install -g npm@...`** — that is the npm the root pm2 apps use.
+
+**Why `/srv/mandm` and not `/var/www`.** `/var/www` is for files nginx serves
+from disk, and M&M serves none — nginx only proxies. Keeping the code outside
+any nginx `root` means one careless `root /var/www;` in someone else's site can
+never make `backend/.env` downloadable. It also keeps ownership apart: the
+other apps are root's, M&M is `mandm`'s, and neither can modify the other.
+Never under `/root` — that directory is mode 700, and `mandm` could not even
+enter its own home.
+
+### 30.3 · The database container
+
+As root:
+
+```bash
+mkdir -p /srv/mandm/db && cd /srv/mandm/db
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" > .env
+chmod 600 .env          # root only — mandm never sees the superuser password
+```
+
+`/srv/mandm/db/compose.yml`:
+
+```yaml
+name: mandm
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: mandm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mm_prod
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=en'
+      LANG: en_US.utf8
+    ports:
+      - '127.0.0.1:5433:5432'      # loopback only, and not 5432
+    volumes:
+      - mandm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d mm_prod']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  mandm-pgdata:
+    name: mandm-pgdata
+```
+
+```bash
+docker compose up -d
+docker compose ps              # healthy
+ss -tlnp | grep 5433           # 127.0.0.1:5433 — never 0.0.0.0
+```
+
+Different from the repository's `docker-compose.yml` on purpose:
+
+| | Repository file | Server file |
+|---|---|---|
+| Port | `5432:5432` | `127.0.0.1:5433:5432` |
+| Password | `postgres` | random, in a root-only file |
+| Databases | `mm_dev` + `mm_test` | `mm_prod` only — no init script |
+| Names | `mm-*` | `mandm-*`, so nothing collides with other projects |
+
+> **`'5432:5432'` would have failed here and been dangerous anywhere.** The
+> port is taken, so the container would not start. On a server where it was
+> free, it would be published on every interface — and Docker writes its own
+> iptables rules, so even an active `ufw` does not block a published port.
+
+### 30.4 · A read-only deploy key, and the clone
+
+As **mandm**:
+
+```bash
+ssh-keygen -t ed25519 -C "srv1126059 mandm deploy" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub
+```
+
+On GitHub: **Settings → Deploy keys → Add deploy key**, title
+`srv1126059 (mandm)`, the `.pub` line, **"Allow write access" unchecked**. The
+server reads the repository and never pushes to it.
+
+```bash
+ssh -T git@github.com
+# accept only if the ED25519 fingerprint is exactly
+#   SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU
+# expected: Hi NFCSolutionsIndia/MandM! You've successfully authenticated...
+cd ~
+git clone git@github.com:NFCSolutionsIndia/MandM.git app
+```
+
+> **The key was first generated as root**, into `/root/.ssh`. Root had no key
+> of its own — `ssh-keygen` would have asked *Overwrite (y/n)?* — so nothing
+> was replaced, and the key was moved rather than regenerated, which kept the
+> GitHub entry valid:
+> ```bash
+> install -d -m 700 -o mandm -g mandm /srv/mandm/.ssh
+> mv /root/.ssh/id_ed25519 /root/.ssh/id_ed25519.pub /srv/mandm/.ssh/
+> chown mandm:mandm /srv/mandm/.ssh/id_ed25519*
+> chmod 600 /srv/mandm/.ssh/id_ed25519
+> ```
+> If `ssh-keygen` ever asks to overwrite on a shared server, answer **n**:
+> another application may be pulling with that key.
+
+### 30.5 · Build
+
+As **mandm**, after confirming `which node` is the nvm one:
+
+```bash
+cd ~/app/backend && npm ci && npm run build
+ls dist/main.js dist/worker.main.js
+```
+
+### 30.6 · Migrations, without the superuser password in a file
+
+The migrations need the `postgres` password, which lives only in
+`/srv/mandm/db/.env` and is readable only by root. Read it as root
+(`cat /srv/mandm/db/.env`, the value after `=`), then as **mandm**:
+
+```bash
+cd ~/app/backend
+read -rs PGPW && MIGRATION_DATABASE_URL="postgres://postgres:$PGPW@127.0.0.1:5433/mm_prod" npm run db:migrate; unset PGPW
+```
+
+`read -rs` waits silently on an empty line — paste, Enter. The password is in
+no file, no history, and gone the moment the command returns. This is the
+pattern for every owner-credential command on the server.
+
+drizzle-kit printed **no success line** here. Check the database, as root:
+
+```bash
+docker exec mandm-postgres psql -U postgres -d mm_prod -c "SELECT count(*) FROM drizzle.__drizzle_migrations;"   # one per migration file
+docker exec mandm-postgres psql -U postgres -d mm_prod -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public';"   # 40
+docker exec mandm-postgres psql -U postgres -d mm_prod -c "\du mm_*"   # three roles, Cannot login
+```
+
+### 30.7 · Give the three roles a login
+
+As root, generate three passwords and keep them in a private note — they are
+needed again in 30.8:
+
+```bash
+for r in APP WORKER ADMIN; do echo "${r}_PW=$(openssl rand -hex 24)"; done
+docker exec -it mandm-postgres psql -U postgres -d mm_prod
+```
+
+```sql
+ALTER ROLE mm_app LOGIN;     \password mm_app
+ALTER ROLE mm_worker LOGIN;  \password mm_worker
+ALTER ROLE mm_admin LOGIN;   \password mm_admin
+\du mm_*
+\q
+```
+
+Paste only the value after `APP_PW=`, twice per prompt. `\password` keeps it
+out of history; `ALTER ROLE ... PASSWORD '...'` would not. Hex, so the values go
+into a URL without escaping.
+
+**Test from the host, not through `docker exec`:**
+
+```bash
+psql -h 127.0.0.1 -p 5433 -U mm_app    -d mm_prod -c "SELECT current_user;"
+psql -h 127.0.0.1 -p 5433 -U mm_worker -d mm_prod -c "SELECT current_user;"
+psql -h 127.0.0.1 -p 5433 -U mm_admin  -d mm_prod -c "SELECT current_user;"
+```
+
+> **`docker exec ... psql -h 127.0.0.1` proves nothing** — it never asked for a
+> password. The image's `pg_hba.conf` trusts `local`, `127.0.0.1/32` and
+> `::1/128` *inside the container*. Connections through the published port
+> arrive from Docker's bridge address and hit the final
+> `host all all all scram-sha-256`, which is what the services use. Only a
+> test from the host exercises the password.
+
+### 30.8 · The server's `.env`
+
+As **mandm**, `nano ~/app/backend/.env`:
+
+```bash
+NODE_ENV=production
+HOST=127.0.0.1
+PORT=4100
+
+DATABASE_URL=postgres://mm_app:<APP_PW>@127.0.0.1:5433/mm_prod
+WORKER_DATABASE_URL=postgres://mm_worker:<WORKER_PW>@127.0.0.1:5433/mm_prod
+ADMIN_DATABASE_URL=postgres://mm_admin:<ADMIN_PW>@127.0.0.1:5433/mm_prod
+ADMIN_ENCRYPTION_KEY=<openssl rand -base64 32 — new for this server>
+
+MAIL_FROM=...
+SMTP_HOST=...
+SMTP_PORT=...
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET=...
+R2_ENDPOINT=...
+```
+
+```bash
+chmod 600 .env
+ls -l .env      # -rw------- mandm mandm
+```
+
+**`ADMIN_ENCRYPTION_KEY` needs a copy off the server.** It encrypts every
+admin's authenticator secret; lose it and every admin re-enrols.
+
+**Never on a server:** `MIGRATION_DATABASE_URL` (30.6 is how migrations get
+it), any `TEST_*` URL (the suite deletes every row), `ENABLE_SSL` (nothing
+reads it — TLS is derived from `SMTP_PORT`).
+
+Verify without printing a secret — these outputs are safe to share:
+
+```bash
+grep -E '^(NODE_ENV|HOST|PORT)=' .env
+sed -nE 's#^([A-Z_]*DATABASE_URL)=postgres://([^:]+):[^@]*@(.*)#\1  user=\2  @\3#p' .env
+grep -E '^(TEST_|ENABLE_SSL|MIGRATION_)' .env || echo "none left"
+psql "$(grep '^ADMIN_DATABASE_URL=' .env | cut -d= -f2-)" -c "SELECT current_user;"
+```
+
+Every URL must end `@127.0.0.1:5433/mm_prod`.
+
+> **Three things went wrong in this file, in order:**
+> 1. It was created from a root shell, so `chmod` as `mandm` failed with
+>    *Operation not permitted*. Fixed as root with `chown mandm:mandm` and
+>    `chmod 600`. Afterwards,
+>    `find /srv/mandm -not -user mandm -not -path '/srv/mandm/db*'` should
+>    print nothing.
+> 2. The whole laptop `.env` was pasted in: `NODE_ENV=development`, `TEST_*`
+>    URLs, no `HOST`. Rewritten from the template above.
+> 3. **`ADMIN_DATABASE_URL` kept port `5432`** — the *other* application's
+>    PostgreSQL. It has no `mm_admin`, and PostgreSQL reports a missing role as
+>    `password authentication failed` so usernames cannot be probed. Sign-in
+>    succeeded (it does not use that pool), then `/auth/me` failed and the
+>    console bounced straight back to `/login`. The `.env` was corrected, but
+>    **the running API still held the old value** — it reads `.env` once, at
+>    start. `systemctl restart mandm-api` fixed it.
+>
+> `/health/ready` was green throughout, because it checks only the `mm_app`
+> pool. A readiness check that covers every configured pool is on the list.
+
+### 30.9 · The API and the worker, as services
+
+As root:
+
+```bash
+cat > /etc/systemd/system/mandm-api.service <<'EOF'
+[Unit]
+Description=M&M API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=mandm
+WorkingDirectory=/srv/mandm/app/backend
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node dist/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/mandm-worker.service <<'EOF'
+[Unit]
+Description=M&M delivery worker
+After=network-online.target docker.service mandm-api.service
+Wants=network-online.target
+
+[Service]
+User=mandm
+WorkingDirectory=/srv/mandm/app/backend
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node dist/worker.main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now mandm-api mandm-worker
+```
+
+`ExecStart` names the nvm binary by absolute path, so the services depend on no
+shell startup file. The worker's longer stop timeout lets an in-flight send be
+recorded before exit.
+
+```bash
+journalctl -u mandm-api -n 30 --no-pager      # "SMTP credentials accepted", no ERROR
+journalctl -u mandm-worker -n 30 --no-pager   # "Delivery engine started as srv1126059:<pid>"
+curl -s 127.0.0.1:4100/health/ready           # "role":"mm_app","rlsEnforced":true
+ss -tlnp | grep -E ':4100|:5433'              # 127.0.0.1 only
+pm2 ls                                        # the other apps, still online
+```
+
+`journalctl` must run as root — as `mandm` it reports *insufficient
+permissions*. Do not add `mandm` to `systemd-journal`: that group reads every
+service's logs on the machine.
+
+### 30.10 · The admin console
+
+As **mandm**:
+
+```bash
+cd ~/app/admin
+echo "MM_API_URL=http://127.0.0.1:4100" > .env.local
+npm ci && npm run build
+```
+
+The console calls the API server-side over loopback; the browser never talks
+to the API. As root:
+
+```bash
+cat > /etc/systemd/system/mandm-admin.service <<'EOF'
+[Unit]
+Description=M&M admin console
+After=network-online.target mandm-api.service
+
+[Service]
+User=mandm
+WorkingDirectory=/srv/mandm/app/admin
+Environment=NODE_ENV=production
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 4101
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload && systemctl enable --now mandm-admin
+curl -sI 127.0.0.1:4101/ | head -3     # 307, location: /login
+```
+
+Three processes, because they are three programs: `backend/` serves JSON —
+including every `/api/v1/admin/...` route — the worker has no port at all, and
+`admin/` is a Next.js application that renders the console's pages. The same
+split as any backend/frontend pair on the server.
+
+### 30.11 · nginx, and HTTPS without a domain
+
+**Why sslip.io rather than `http://<ip>/admin`.** Serving on a bare IP fails
+three ways: the console's cookies are `Secure` in production and browsers drop
+them over plain HTTP, so sign-in cannot work; Next.js under `/admin` needs a
+`basePath` and five hard-coded paths fixed; and iOS and Android refuse
+cleartext API calls by default. `api.<ip-with-dashes>.sslip.io` resolves to the
+IP with no purchase and no DNS setup, so it gets a real Let's Encrypt
+certificate, a `server_name` nothing else matches, and no code change. Buying a
+domain later changes two names.
+
+As root:
+
+```bash
+IPD=$(curl -s -4 ifconfig.me | tr . -)
+getent hosts api.$IPD.sslip.io admin.$IPD.sslip.io      # both → the server's IP
+
+cat > /etc/nginx/sites-available/mandm <<'EOF'
+# M&M. Matches only these two names, so no existing site can be affected.
+
+server {
+    listen 80;
+    server_name api.IPDASH.sslip.io;
+
+    # Media goes straight to R2 via signed URLs; API bodies are small JSON.
+    client_max_body_size 2m;
+
+    # The console reaches its API over 127.0.0.1. Nobody on the internet
+    # has a reason to call it directly.
+    location /api/v1/admin/ { return 404; }
+
+    location / {
+        proxy_pass http://127.0.0.1:4100;
+        proxy_set_header Host $host;
+        # Overwrite, never append: the API trusts this for audit IPs.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name admin.IPDASH.sslip.io;
+
+    location / {
+        proxy_pass http://127.0.0.1:4101;
+        # Next.js checks every form post's Origin against Host.
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}
+EOF
+
+sed -i "s/IPDASH/$IPD/g" /etc/nginx/sites-available/mandm
+ln -s /etc/nginx/sites-available/mandm /etc/nginx/sites-enabled/mandm
+nginx -t && systemctl reload nginx
+certbot --nginx -d api.$IPD.sslip.io -d admin.$IPD.sslip.io --redirect
+```
+
+The file is written with a placeholder and `sed` fills in the IP, because an
+unquoted heredoc would also have expanded nginx's own `$host` and
+`$remote_addr` to nothing.
+
+Two lines worth defending in review:
+
+- **`X-Forwarded-For $remote_addr`, not `$proxy_add_x_forwarded_for`.** The API
+  runs with `trustProxy: true`. Appending keeps whatever the client sent as the
+  leftmost address, and the audit trail would record an IP the client chose.
+- **`/api/v1/admin/` returns 404 on the public name.** The console never uses
+  it from outside, so it is attack surface with no user.
+
+**`reload`, never `restart`** — the other sites keep serving, and a failed
+`nginx -t` applies nothing. certbot edits only the server blocks whose names it
+was given, and renews on the timer that already renews the server's existing
+certificate.
+
+> sslip.io is shared with everybody who uses it, so Let's Encrypt can refuse
+> with *too many certificates already issued*. It did not here.
+
+Verify, from the outside in:
+
+```bash
+curl -s https://api.$IPD.sslip.io/health/ready                                   # role mm_app
+curl -sI https://api.$IPD.sslip.io/api/v1/admin/v1/auth/me | head -1             # 404
+curl -sI http://admin.$IPD.sslip.io/ | head -1                                    # 301 → https
+curl -sI https://ai.nfcsolutionsusa.com | head -1                                 # the other site, unchanged
+```
+
+### 30.12 · Console access
+
+`grant` refuses a role that does not exist, and on this server none did — the
+`support` role had only ever been inserted by hand on a laptop. Migration
+`0017_support_role` now creates it everywhere (commit `3f9905c`). After
+pulling it, as **mandm**:
+
+```bash
+cd ~/app && git pull && cd backend
+read -rs PGPW && MIGRATION_DATABASE_URL="postgres://postgres:$PGPW@127.0.0.1:5433/mm_prod" npm run db:migrate; unset PGPW
+read -rs PGPW && MIGRATION_DATABASE_URL="postgres://postgres:$PGPW@127.0.0.1:5433/mm_prod" npm run admin -- grant someone@nfcsolutionsusa.com; unset PGPW
+read -rs PGPW && MIGRATION_DATABASE_URL="postgres://postgres:$PGPW@127.0.0.1:5433/mm_prod" npm run admin -- list; unset PGPW
+```
+
+Then sign in at `https://admin.<ip>.sslip.io`: email code, authenticator
+enrolment the first time, TOTP, dashboard. Two staff accounts are active and
+enrolled on this server.
+
+### 30.13 · Nightly backup
+
+As root:
+
+```bash
+mkdir -p /srv/mandm/backups && chmod 700 /srv/mandm/backups
+crontab -l          # read what is there first — add, never replace
+crontab -e
+```
+
+Append:
+
+```cron
+30 2 * * * docker exec mandm-postgres pg_dump -U postgres -d mm_prod -Fc | gzip > /srv/mandm/backups/mm_prod_$(date +\%F).dump.gz && find /srv/mandm/backups -name '*.dump.gz' -mtime +14 -delete
+```
+
+Run it once by hand and check the file appears. Fourteen days on the same disk
+is **not** a backup against losing the server — a copy off the machine is the
+next step (section 28).
+
+### 30.14 · Deploying a change, by hand
+
+**Superseded by section 31**, which deploys every push to `main`. Kept because
+it was how the first releases went out, and because it is the procedure to fall
+back on if CD is ever switched off:
+
+```bash
+# as mandm
+cd ~/app && git pull
+cd backend && npm ci && npm run build
+# only if the pull brought a migration:
+read -rs PGPW && MIGRATION_DATABASE_URL="postgres://postgres:$PGPW@127.0.0.1:5433/mm_prod" npm run db:migrate; unset PGPW
+cd ../admin && npm ci && npm run build
+
+# as root
+systemctl restart mandm-api mandm-worker mandm-admin
+curl -s 127.0.0.1:4100/health/ready
+```
+
+A changed `.env` needs the restart too — it is read once, at start.
+
+### 30.15 · Removing all of it
+
+Nothing above modified anything that existed before, so removal is clean. As
+root:
+
+```bash
+rm /etc/nginx/sites-enabled/mandm && nginx -t && systemctl reload nginx
+systemctl disable --now mandm-admin mandm-worker mandm-api
+rm /etc/systemd/system/mandm-*.service && systemctl daemon-reload
+cd /srv/mandm/db && docker compose down        # add -v only to DELETE the data
+certbot delete --cert-name api.<ip>.sslip.io
+```
+
+Then delete the deploy key on GitHub.
+
+### Not done yet
+
+| | |
+|---|---|
+| Off-site backups | The nightly dump stays on this disk |
+| A domain | Two names change, in nginx and certbot |
+
+CD and the all-pools readiness check are section 31.
+
+---
+
+## 31 · Deploying on every push to main
+
+A push to `main` runs CI; if both jobs pass, the **Deploy** job asks the server
+to deploy that commit. The server does the rest itself.
+
+```
+push → CI (backend · admin) → Deploy job ──ssh, sends only the sha──► mandm-deploy
+                                                                        │
+   fetch · refuse anything not on main · extract a fresh tree ◄─────────┘
+   npm ci + build, backend and console   (the old release keeps serving)
+   migrate, as postgres, with a password GitHub never sees
+   switch /srv/mandm/current · restart the three units
+   /health/ready + console + worker ── fail ──► switch back · restart
+```
+
+### What makes it safe to hand to a robot
+
+| | |
+|---|---|
+| **The key can run one thing** | In `authorized_keys` it is pinned to `/usr/local/bin/mandm-deploy` with `restrict`: no shell, no file copy, no port forwarding. A stolen key can deploy a commit that is already on `main`, and nothing else |
+| **That one thing is root-owned, outside the repo** | A commit can change *what* is deployed, never *what the key may do* |
+| **Only `main` goes live** | The script refuses any sha that is not an ancestor of `origin/main`, whatever the caller sends |
+| **The superuser password stays on the server** | `mandm-migrate` reads it as root from `/srv/mandm/db/.env` and runs the migration code as `mandm`. It travels in the environment, never in arguments — `ps` shows every user's arguments |
+| **`mandm`'s sudo is two commands long** | Run `mandm-migrate` on a release, restart its own three units. Not another service, not a shell |
+| **The server's host key is pinned in GitHub** | A host that impersonates the server is refused, rather than handed a deploy |
+| **Releases, not in-place builds** | Each commit builds in `/srv/mandm/releases/<sha>` while the previous one serves. The switch is an atomic symlink rename |
+| **Automatic rollback** | Readiness now checks **every** configured pool, each as its own role, and answers 503 otherwise. Failing that, the console or the worker puts the previous release back |
+| **One at a time** | A lock on the server, and a GitHub concurrency group that queues deploys rather than cancelling one halfway |
+
+> **Rollback restores code, never the database.** The migrations have already
+> run when the health check decides. Every migration must therefore leave the
+> schema usable by the *previous* release: add a column in one deploy, use it in
+> the next; stop using one, drop it later. A migration that breaks the old code
+> turns rollback into a second outage.
+
+### The layout after this section
+
+```
+/srv/mandm/
+├── repo/                 the git clone — fetched from, never run from (was app/)
+├── releases/<sha>/       one built tree per deploy; the newest five are kept
+├── current → releases/…  the live release; systemd resolves it at each start
+├── shared/
+│   ├── backend.env       the .env from 30.8, linked into every release
+│   └── admin.env.local
+├── logs/deploy.log
+├── db/                   root only, as before
+└── backups/              root only, as before
+```
+
+The repository carries everything the server needs, in `deploy/`:
+
+| File | Installed as |
+|---|---|
+| `deploy/ssh-entry.sh` | `/usr/local/bin/mandm-deploy`, root, 755 |
+| `deploy/migrate.sh` | `/usr/local/sbin/mandm-migrate`, root, 755 |
+| `deploy/sudoers` | `/etc/sudoers.d/mandm-deploy`, root, 440 |
+| `deploy/systemd/*.service` | `/etc/systemd/system/`, pointing at `/srv/mandm/current` |
+| `deploy/deploy.sh` | not installed — runs from inside each release |
+
+### 31.1 · Install the server side
+
+The first three files are copied by root because they decide what the key and
+`mandm` may do. **A change to any of them in the repository does nothing until
+it is installed again by hand** — that is the point.
+
+```bash
+# as mandm — fetch the commit that adds deploy/
+cd ~/app && git pull
+exit
+
+# as root
+install -m 755 -o root -g root /srv/mandm/app/deploy/ssh-entry.sh /usr/local/bin/mandm-deploy
+install -m 755 -o root -g root /srv/mandm/app/deploy/migrate.sh   /usr/local/sbin/mandm-migrate
+install -m 440 -o root -g root /srv/mandm/app/deploy/sudoers      /etc/sudoers.d/mandm-deploy
+visudo -cf /etc/sudoers.d/mandm-deploy && visudo -c
+sudo -l -U mandm          # exactly the two commands, NOPASSWD
+```
+
+`visudo -c` matters: a sudoers file with a syntax error can lock **every** user
+out of `sudo` on the machine.
+
+### 31.2 · Move to the release layout
+
+```bash
+# as root
+install -d -m 700 -o mandm -g mandm /srv/mandm/shared /srv/mandm/releases /srv/mandm/logs
+install -m 600 -o mandm -g mandm /srv/mandm/app/backend/.env      /srv/mandm/shared/backend.env
+install -m 600 -o mandm -g mandm /srv/mandm/app/admin/.env.local  /srv/mandm/shared/admin.env.local
+
+mv /srv/mandm/app /srv/mandm/repo
+install -m 644 /srv/mandm/repo/deploy/systemd/mandm-*.service /etc/systemd/system/
+systemctl daemon-reload
+```
+
+The running services do not notice the rename — a process holds its directory,
+not its path — but they cannot be *restarted* until `current` exists, so go
+straight on to the first deploy.
+
+### 31.3 · The first deploy, by hand, through the same door
+
+```bash
+sudo -iu mandm
+SSH_ORIGINAL_COMMAND=$(git -C ~/repo rev-parse origin/main) /usr/local/bin/mandm-deploy
+```
+
+The same script the key will run, with the same input, so a success here is a
+success for Actions too. Two or three minutes; it ends `=== live: <sha>`.
+
+```bash
+readlink /srv/mandm/current                        # /srv/mandm/releases/<sha>
+curl -s 127.0.0.1:4100/health/ready; echo          # "connections":{"admin":{...mm_admin},"worker":{...mm_worker}}
+exit
+
+# as root — the old working tree held a copy of every secret
+rm /srv/mandm/repo/backend/.env /srv/mandm/repo/admin/.env.local
+rm -rf /srv/mandm/repo/backend/node_modules /srv/mandm/repo/backend/dist \
+       /srv/mandm/repo/admin/node_modules /srv/mandm/repo/admin/.next
+```
+
+From here, owner-credential commands run from the live release:
+`cd /srv/mandm/current/backend` instead of `~/app/backend` (30.12).
+
+### 31.4 · The key GitHub uses
+
+As root:
+
+```bash
+ssh-keygen -t ed25519 -f /root/mandm-actions -N "" -C "github-actions mandm deploy"
+
+echo "command=\"/usr/local/bin/mandm-deploy\",restrict $(cat /root/mandm-actions.pub)" \
+  >> /srv/mandm/.ssh/authorized_keys
+chown mandm:mandm /srv/mandm/.ssh/authorized_keys
+chmod 600 /srv/mandm/.ssh/authorized_keys
+```
+
+Prove the key can do nothing but deploy:
+
+```bash
+ssh -i /root/mandm-actions -o IdentitiesOnly=yes mandm@127.0.0.1 'id'
+# mandm-deploy: expected a 40-character commit sha       ← not the output of id
+```
+
+The first connection asks to trust `127.0.0.1` — that is this machine, answer
+`yes`. If it is refused instead, see the table at the end.
+
+The server's host key, for GitHub to pin:
+
+```bash
+awk -v h=72.61.173.62 '{print h, $1, $2}' /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+### 31.5 · GitHub
+
+Repository → **Settings → Secrets and variables → Actions**.
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `DEPLOY_HOST` | `72.61.173.62` |
+| Secret | `DEPLOY_SSH_KEY` | `cat /root/mandm-actions` — the whole private key, `BEGIN` and `END` lines included |
+| Secret | `DEPLOY_KNOWN_HOSTS` | the `awk` line from 31.4 |
+| **Variable** | `DEPLOY_ENABLED` | `true` |
+
+Then remove the private key from the server — GitHub holds the only copy:
+
+```bash
+shred -u /root/mandm-actions
+```
+
+`DEPLOY_ENABLED` is the switch. Anything but `true` and the Deploy job is
+*skipped*, not failed — the way to pause deploys during maintenance.
+
+### 31.6 · Prove it
+
+Push any commit to `main`. In **Actions**, the run shows Backend, Admin
+console, then Deploy. On the server, as root:
+
+```bash
+tail -f /srv/mandm/logs/deploy.log
+```
+
+### When something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| Deploy job **skipped** | `DEPLOY_ENABLED` is not `true`, or it was not a push to `main` |
+| `Host key verification failed` | `DEPLOY_KNOWN_HOSTS` is wrong, or the server was rebuilt |
+| `Permission denied (publickey)` | Key mismatch — or sshd refuses `mandm`: check `sshd -T \| grep -iE '^(allowusers\|allowgroups)'` and `passwd -S mandm` (a status of `L`, locked, can block key logins; `usermod -p '*' mandm` unlocks without giving it a password) |
+| `another deploy is running` | Exit 75. The previous deploy holds the lock; re-run the job when it finishes |
+| `is not on origin/main, refusing` | Exit 3. The sha was not pushed to `main` |
+| `sudo: a password is required` | `/etc/sudoers.d/mandm-deploy` missing or not the installed version |
+| `failed verification`, then `rolled back` | The new release did not come up; the old one is serving. `journalctl -u mandm-api -n 50` says why |
+| `ROLLBACK FAILED TOO` | Usually a migration the previous release cannot run against. Needs a person |
+
+To revoke the key: delete its line from `/srv/mandm/.ssh/authorized_keys`. To
+pause: set `DEPLOY_ENABLED` to anything else.
+
+---
+
 ## Environment reference
 
 `backend/.env`, which is **not** in the repository. Copy this, then replace
@@ -3066,6 +3885,7 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 |---|---|---|
 | `NODE_ENV` | no | `development` · `test` · `production`. A typo is rejected rather than silently disabling every production guard |
 | `PORT` | no | defaults to 3000 |
+| `HOST` | no | defaults to `0.0.0.0`, which a container needs. **`127.0.0.1` on a VPS**, so only nginx can reach the process |
 | `DATABASE_URL` | **yes** | **`mm_app`, never `postgres`.** PostgreSQL bypasses RLS for a superuser and for a table's owner, so the wrong role here disables every policy with no error |
 | `MIGRATION_DATABASE_URL` | no | the owner, drizzle-kit only. Omitted on an API task on purpose |
 | `DB_POOL_MAX` | no | 10. What reaches the database is `containers × this` |
@@ -3113,7 +3933,9 @@ there, no code may read it — which is what keeps this table from quietly
 becoming a stale guess. A missing or malformed value aborts the boot and names
 every problem at once, rather than surfacing hours later inside a request.
 
-**On a server** none of this is a file. Values come from AWS Secrets Manager and
+**On a VPS** this is a file, `chmod 600`, owned by the service user, and
+without `MIGRATION_DATABASE_URL` or any `TEST_*` URL — see section 30.8.
+**On AWS, later,** none of it is a file: values come from Secrets Manager and
 the API task is given only `DATABASE_URL`. See [Server notes](#server-notes).
 
 ---
@@ -3125,6 +3947,9 @@ architecture document specifies AWS end to end; that is still the
 destination, but it is not the first stop, so this section covers both.
 
 ### On a VPS
+
+**Section 30 is the runbook**, every command as it was run on the first server.
+This table is the summary.
 
 | Concern | On a VPS |
 |---|---|
@@ -3170,8 +3995,11 @@ is alive, which would keep a container in rotation while every request it serves
 fails. `role` in that response must read `mm_app` — `postgres` means row-level
 security is being bypassed.
 
-**CI** runs `npm run typecheck`, `npm run lint`, `npm test`, and
-`npm run test:e2e`. The last needs a PostgreSQL service container and the two
+**CI** — `.github/workflows/ci.yml`, on every push and pull request — runs
+`npm run typecheck`, `npm run lint`, `npm test`, and `npm run test:e2e`, and
+builds the console. It creates `mm_app`, `mm_worker` and `mm_admin` with a
+login *before* the suite migrates (the migrations skip roles that exist) and
+generates a throwaway `ADMIN_ENCRYPTION_KEY` per run. The last needs a PostgreSQL service container and the two
 `TEST_*` URLs; it applies the real migrations and deletes every row, so it must
 never be pointed at anything but a throwaway database.
 

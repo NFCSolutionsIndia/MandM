@@ -1,0 +1,16 @@
+[Unit]
+Description=M&M delivery worker
+After=network-online.target docker.service mandm-api.service
+Wants=network-online.target
+
+[Service]
+User=mandm
+WorkingDirectory=/srv/mandm/current/backend
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node dist/worker.main.js
+Restart=on-failure
+RestartSec=5
+# Longer than the API: an in-flight send must be recorded before exit.
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

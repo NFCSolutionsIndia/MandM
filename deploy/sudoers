@@ -1,0 +1,5 @@
+# Installed as /etc/sudoers.d/mandm-deploy (root, 0440). Check with visudo -cf.
+#
+# The deploy may apply migrations and restart M&M's own three services.
+# Nothing else: not another service, not a shell, not a different argument.
+mandm ALL=(root) NOPASSWD: /usr/local/sbin/mandm-migrate /srv/mandm/releases/*, /usr/bin/systemctl restart mandm-api mandm-worker mandm-admin

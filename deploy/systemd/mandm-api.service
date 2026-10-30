@@ -1,0 +1,16 @@
+[Unit]
+Description=M&M API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=mandm
+# /srv/mandm/current is the live release; systemd resolves it at each start.
+WorkingDirectory=/srv/mandm/current/backend
+ExecStart=/srv/mandm/.nvm/versions/node/v24.11.1/bin/node dist/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
