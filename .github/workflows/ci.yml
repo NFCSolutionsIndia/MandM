@@ -146,17 +146,17 @@ jobs:
       - name: Deploy over SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          # The server's own host key, pinned. Never ssh-keyscan at deploy
-          # time: that trusts whoever answers.
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        # The server's host key is not pinned — a decision, SETUP.md 31.5: the
+        # runner trusts whoever answers at DEPLOY_HOST. The key still cannot be
+        # captured or replayed, but an impostor could fake a successful deploy.
         run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key \
             -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o ServerAliveInterval=30 \
-            "mandm@$DEPLOY_HOST" "$GITHUB_SHA"
+            "$DEPLOY_USER@$DEPLOY_HOST" "$GITHUB_SHA"

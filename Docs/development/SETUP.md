@@ -3681,7 +3681,7 @@ push → CI (backend · admin) → Deploy job ──ssh, sends only the sha─�
 | **Only `main` goes live** | The script refuses any sha that is not an ancestor of `origin/main`, whatever the caller sends |
 | **The superuser password stays on the server** | `mandm-migrate` reads it as root from `/srv/mandm/db/.env` and runs the migration code as `mandm`. It travels in the environment, never in arguments — `ps` shows every user's arguments |
 | **`mandm`'s sudo is two commands long** | Run `mandm-migrate` on a release, restart its own three units. Not another service, not a shell |
-| **The server's host key is pinned in GitHub** | A host that impersonates the server is refused, rather than handed a deploy |
+| **The server's host key is *not* pinned** | A decision, not an oversight (31.5). The runner trusts whoever answers at `DEPLOY_HOST` |
 | **Releases, not in-place builds** | Each commit builds in `/srv/mandm/releases/<sha>` while the previous one serves. The switch is an atomic symlink rename |
 | **Automatic rollback** | Readiness now checks **every** configured pool, each as its own role, and answers 503 otherwise. Failing that, the console or the worker puts the previous release back |
 | **One at a time** | A lock on the server, and a GitHub concurrency group that queues deploys rather than cancelling one halfway |
@@ -3784,6 +3784,10 @@ From here, owner-credential commands run from the live release:
 
 As root:
 
+This creates a **new** key pair, `/root/mandm-actions` (private) and
+`/root/mandm-actions.pub` (public). It is not the deploy key from 30.4: that
+one lets the server pull from GitHub, this one lets GitHub log in to the server.
+
 ```bash
 ssh-keygen -t ed25519 -f /root/mandm-actions -N "" -C "github-actions mandm deploy"
 
@@ -3803,12 +3807,6 @@ ssh -i /root/mandm-actions -o IdentitiesOnly=yes mandm@127.0.0.1 'id'
 The first connection asks to trust `127.0.0.1` — that is this machine, answer
 `yes`. If it is refused instead, see the table at the end.
 
-The server's host key, for GitHub to pin:
-
-```bash
-awk -v h=72.61.173.62 '{print h, $1, $2}' /etc/ssh/ssh_host_ed25519_key.pub
-```
-
 ### 31.5 · GitHub
 
 Repository → **Settings → Secrets and variables → Actions**.
@@ -3816,9 +3814,26 @@ Repository → **Settings → Secrets and variables → Actions**.
 | Kind | Name | Value |
 |---|---|---|
 | Secret | `DEPLOY_HOST` | `72.61.173.62` |
+| Secret | `DEPLOY_USER` | `mandm` |
 | Secret | `DEPLOY_SSH_KEY` | `cat /root/mandm-actions` — the whole private key, `BEGIN` and `END` lines included |
-| Secret | `DEPLOY_KNOWN_HOSTS` | the `awk` line from 31.4 |
 | **Variable** | `DEPLOY_ENABLED` | `true` |
+
+**The server's host key is not pinned.** Each runner is new, has never seen
+the server, and accepts whatever host key answers at `DEPLOY_HOST`. Chosen on
+2026-10-30 to keep the setup to three secrets. What that does and does not
+expose:
+
+- The private key cannot be captured or replayed: SSH signs for one session
+  only, and the key is never sent.
+- Nothing secret travels — the only input is the commit sha.
+- An impostor in the network path **could** answer `=== live` and turn the run
+  green while the server keeps the old release. Check `readlink
+  /srv/mandm/current` on the server when a deploy matters.
+
+To pin it later: add a secret `DEPLOY_KNOWN_HOSTS` holding the output of
+`awk -v h=72.61.173.62 '{print h, $1, $2}' /etc/ssh/ssh_host_ed25519_key.pub`,
+write it to `~/.ssh/known_hosts` in the workflow, and set
+`StrictHostKeyChecking=yes`.
 
 Then remove the private key from the server — GitHub holds the only copy:
 
@@ -3843,7 +3858,6 @@ tail -f /srv/mandm/logs/deploy.log
 | Symptom | Cause |
 |---|---|
 | Deploy job **skipped** | `DEPLOY_ENABLED` is not `true`, or it was not a push to `main` |
-| `Host key verification failed` | `DEPLOY_KNOWN_HOSTS` is wrong, or the server was rebuilt |
 | `Permission denied (publickey)` | Key mismatch — or sshd refuses `mandm`: check `sshd -T \| grep -iE '^(allowusers\|allowgroups)'` and `passwd -S mandm` (a status of `L`, locked, can block key logins; `usermod -p '*' mandm` unlocks without giving it a password) |
 | `another deploy is running` | Exit 75. The previous deploy holds the lock; re-run the job when it finishes |
 | `is not on origin/main, refusing` | Exit 3. The sha was not pushed to `main` |
