@@ -35,6 +35,14 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
 
   /**
+   * The interface to listen on. `0.0.0.0` inside a container, where the port
+   * is reached through Docker; `127.0.0.1` on a shared VPS, where nginx is the
+   * only way in. Anything else would let a client reach the process directly
+   * and forge the `X-Forwarded-For` that `trustProxy` believes.
+   */
+  HOST: z.string().min(1).default('0.0.0.0'),
+
+  /**
    * ═══════════════════════════════════════════════════════════════════════
    *  The APPLICATION credential. This is `mm_app`, never `postgres`.
    * ═══════════════════════════════════════════════════════════════════════

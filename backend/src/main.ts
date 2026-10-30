@@ -54,7 +54,8 @@ async function bootstrap() {
   void app.get(MailService).verify();
 
   // Fastify binds to 127.0.0.1 by default. Inside a container that means nothing
-  // outside the container can reach it, so bind all interfaces explicitly.
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  // outside the container can reach it, so the default is all interfaces. A
+  // shared VPS sets HOST=127.0.0.1 so that only nginx can reach the process.
+  await app.listen(process.env.PORT ?? 3000, process.env.HOST ?? '0.0.0.0');
 }
 void bootstrap();
