@@ -1,4 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 
 import { Public } from '../auth/auth.guard.js';
 import { DbService } from '../db/db.service.js';
@@ -41,16 +47,44 @@ export class HealthController {
    */
   @Get('ready')
   async ready() {
-    const { role, latencyMs } = await this.db.ping();
+    const [{ role, latencyMs }, pools] = await Promise.all([
+      this.db.ping(),
+      this.db.pingConfigured(),
+    ]);
 
-    return {
-      status: 'ok',
+    /**
+     * Every configured pool must connect, and as the role it was built for.
+     *
+     * The role matters as much as the connection: a console pool that logs in
+     * as `postgres` connects perfectly and bypasses every admin policy. Both
+     * are 503, so a deploy that gates on this endpoint rolls back instead of
+     * going live half-broken.
+     */
+    const failing = (
+      [
+        ['admin', pools.admin, 'mm_admin'],
+        ['worker', pools.worker, 'mm_worker'],
+      ] as const
+    )
+      .filter(([, check, expected]) => check && (!check.connected || check.role !== expected))
+      .map(([name]) => name);
+
+    const body = {
+      status: failing.length ? 'unavailable' : 'ok',
       database: {
         connected: true,
         role,
         latencyMs,
         rlsEnforced: role !== 'postgres',
       },
+      connections: pools,
+      ...(failing.length ? { failing } : {}),
     };
+
+    if (failing.length) {
+      throw new ServiceUnavailableException(body);
+    }
+
+    return body;
   }
 }

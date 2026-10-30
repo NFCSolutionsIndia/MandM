@@ -178,4 +178,44 @@ export class DbService {
 
     return { role, latencyMs };
   }
+
+  /**
+   * The console and worker connections, for readiness.
+   *
+   * `ping()` alone proved only the application pool. On the first server the
+   * console credential pointed at another cluster entirely: readiness stayed
+   * green, sign-in worked, and the first query on the admin pool failed. A
+   * pool that is configured but cannot connect is a broken deploy, and the
+   * deploy should find out — not the first admin.
+   *
+   * `null` for a pool this process was not given, which is a deployment
+   * choice rather than a fault. A failure reports the reason without the
+   * connection string: the message names the role, never the password.
+   */
+  async pingConfigured(): Promise<{
+    admin: PoolCheck | null;
+    worker: PoolCheck | null;
+  }> {
+    const [admin, worker] = await Promise.all([
+      this.checkPool('admin', this.adminDb),
+      this.checkPool('worker', this.workerDb),
+    ]);
+    return { admin, worker };
+  }
+
+  private async checkPool(name: string, db: Db | null): Promise<PoolCheck | null> {
+    if (!db) return null;
+    try {
+      const result = await db.execute<{ role: string }>(sql`SELECT current_user AS role`);
+      return { connected: true, role: result.rows[0]?.role ?? null };
+    } catch (error) {
+      this.logger.error(`The ${name} pool cannot connect: ${(error as Error).message}`);
+      return { connected: false, role: null };
+    }
+  }
+}
+
+export interface PoolCheck {
+  connected: boolean;
+  role: string | null;
 }

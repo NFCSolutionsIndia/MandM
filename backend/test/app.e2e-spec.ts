@@ -65,4 +65,15 @@ describe('application', () => {
     expect(res.body.database.role).toBe('mm_app');
     expect(res.body.database.rlsEnforced).toBe(true);
   });
+
+  it('proves the console and worker connections too, each as its own role', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200);
+
+    // The first server's admin pool pointed at another cluster while this
+    // endpoint stayed green. Readiness now covers every configured pool.
+    expect(res.body.connections.admin).toEqual({ connected: true, role: 'mm_admin' });
+    expect(res.body.connections.worker).toEqual({ connected: true, role: 'mm_worker' });
+  });
 });
