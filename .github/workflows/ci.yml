@@ -1,0 +1,115 @@
+# Checks on every push and pull request.
+#
+# Mirrors what a developer runs locally (SETUP.md, "Server notes → CI"):
+# typecheck, lint, unit tests and the integration suite against a real
+# PostgreSQL 17 — because row-level security, triggers and constraints are
+# exactly the things a mocked database cannot prove.
+#
+# Nothing here reaches the server or holds a production secret. Every
+# credential below belongs to a database that exists for one run and is
+# thrown away.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # The same image and cluster settings as docker-compose.yml, so a
+        # collation difference cannot make CI and a laptop disagree.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mm_test
+          POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale-provider=icu --icu-locale=en'
+          LANG: en_US.utf8
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The suite refuses to run unless every URL names mm_test.
+      TEST_DATABASE_URL: postgres://mm_app:mm_app@127.0.0.1:5432/mm_test
+      TEST_MIGRATION_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/mm_test
+      TEST_ADMIN_DATABASE_URL: postgres://mm_admin:mm_admin@127.0.0.1:5432/mm_test
+      TEST_WORKER_DATABASE_URL: postgres://mm_worker:mm_worker@127.0.0.1:5432/mm_test
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # The version the server runs under nvm.
+          node-version: 24.11.1
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Create the database roles
+        # The migrations create these NOLOGIN and skip any that already
+        # exist, so creating them first with a login is the per-environment
+        # step SETUP.md describes — done here before the suite migrates.
+        run: |
+          psql "postgres://postgres:postgres@127.0.0.1:5432/mm_test" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE mm_app    LOGIN PASSWORD 'mm_app'    NOSUPERUSER NOBYPASSRLS;
+          CREATE ROLE mm_worker LOGIN PASSWORD 'mm_worker' NOSUPERUSER NOBYPASSRLS;
+          CREATE ROLE mm_admin  LOGIN PASSWORD 'mm_admin'  NOSUPERUSER NOBYPASSRLS;
+          SQL
+
+      - name: Generate a throwaway console key
+        run: echo "ADMIN_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:e2e
+
+  admin:
+    name: Admin console
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: admin
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.11.1
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
