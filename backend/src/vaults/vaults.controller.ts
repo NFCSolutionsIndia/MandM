@@ -1,8 +1,18 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Post,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ZodValidationPipe } from '../common/zod.pipe.js';
+import type { Env } from '../config/env.schema.js';
 import { ActorContext } from '../db/actor-context.js';
 import { DbService } from '../db/db.service.js';
 import { vaultMembers, vaults } from '../db/schema/index.js';
@@ -22,7 +32,10 @@ const createVaultSchema = z.object({
  */
 @Controller('vaults')
 export class VaultsController {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   @Get()
   async list() {
@@ -67,9 +80,18 @@ export class VaultsController {
     });
   }
 
-  /** Proof that the boundary is the database's, not this handler's. */
+  /**
+   * Proof that the boundary is the database's, not this handler's.
+   *
+   * A demonstration, so production answers 404 — the same as a route that
+   * does not exist, rather than a 403 that admits it does.
+   */
   @Get('debug/row-counts')
   async rowCounts() {
+    if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
+      throw new NotFoundException();
+    }
+
     const result = await this.db.tx((tx) =>
       tx.execute<{ vaults: string; memories: string; users: string }>(
         sql`SELECT (SELECT count(*) FROM vaults)   AS vaults,

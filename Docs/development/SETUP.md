@@ -220,7 +220,7 @@ cd backend
 npm run start:dev      # watch mode, restarts on save
 ```
 
-`http://localhost:3000` returns `Hello World!`.
+`http://localhost:3000/health` returns `{"status":"ok","uptimeSeconds":…}`.
 
 ---
 
@@ -1735,6 +1735,7 @@ because as far as this connection is concerned it does.
 
 `GET /api/v1/vaults/debug/row-counts` makes the point bluntly: an unqualified
 `count(*)` over three whole tables still counts only what the caller may see.
+It answers 404 when `NODE_ENV=production`: a demonstration, not a feature.
 
 ### Two bugs the tests caught
 
@@ -2666,10 +2667,17 @@ npm run start:dev
 npm run dev:code -- someone@example.com     # recover a sign-in code
 ```
 
-Import `Docs/development/MandM.postman_collection.json` into Postman. 25
-requests in six folders, and the tokens wire themselves together — each
+Import `Docs/development/MandM.postman_collection.json` into Postman. 41
+requests in seven folders, and the tokens wire themselves together — each
 sign-in request captures what the next one needs, so nothing is copied by
 hand.
+
+Import the two environments beside it as well, and pick one:
+`MandM.local.postman_environment.json` (`http://127.0.0.1:3000`) or
+`MandM.production.postman_environment.json`
+(`https://api.72-61-173-62.sslip.io`). Against production the Admin panel
+folder is a 404 by design — nginx refuses `/api/v1/admin/` from outside — and
+so is `/vaults/debug/row-counts`.
 
 ### The route prefix is not what the controllers say
 

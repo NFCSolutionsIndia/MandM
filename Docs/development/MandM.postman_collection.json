@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Moments & Memories",
-    "description": "Every endpoint the product exposes, in the order you would exercise them.\n\nThree realms, and they do not share credentials:\n  • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer)\n  • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)\n  • Health      — /health          no auth\n\nTokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.\n\nSign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>",
+    "description": "Every endpoint the product exposes, in the order you would exercise them.\n\nThree realms, and they do not share credentials:\n  • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer)\n  • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)\n  • Health      — /health          no auth\n\nPick an environment: \"M&M — local\" (http://127.0.0.1:3000) or \"M&M — production\" (https://api.72-61-173-62.sslip.io). In production the Admin panel folder answers 404 by design — nginx serves /api/v1/admin/ to nobody outside the server — and GET /vaults/debug/row-counts answers 404 too.\n\nTokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.\n\nSign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -67,6 +67,10 @@
     },
     {
       "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "extraRecipientId",
       "value": ""
     }
   ],
@@ -438,7 +442,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Aaji at the wedding\",\n  \"note\": \"She wore the green sari.\",\n  \"occurredAt\": \"1974-03-14T00:00:00Z\",\n  \"occurredPrecision\": \"year\",\n  \"clientId\": \"{{$guid}}\"\n}"
+              "raw": "{\n  \"title\": \"Aaji at the wedding\",\n  \"note\": \"She wore the green sari.\",\n  \"occurredAt\": \"1974-03-14T00:00:00Z\",\n  \"occurredPrecision\": \"year\",\n  \"occasion\": \"wedding\",\n  \"clientId\": \"{{$guid}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories",
@@ -506,6 +510,53 @@
             },
             "description": "Keyset pagination, not offset: an offset shifts under you when somebody adds a memory mid-scroll, and this timeline is appended to constantly. Pass nextBefore back as `before`."
           }
+        },
+        {
+          "name": "GET /vaults/:vaultId/memories — older page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories?limit=50&before=1980-01-01T00:00:00Z",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "memories"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "before",
+                  "value": "1980-01-01T00:00:00Z"
+                }
+              ]
+            },
+            "description": "Paging. `before` is an occurredAt instant: pass the oldest occurredAt from the previous page to get the page after it. The example returns the 1974 memory created above."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "POST /uploads",
@@ -707,7 +758,7 @@
                 "capsules"
               ]
             },
-            "description": "Creates a DRAFT. unlockAt is when it opens; unlockTimezone is the zone the sender meant, kept separately so a message for a daughter in Pune scheduled from London does not arrive at 03:00 her time.\n\nunlockKind: datetime | milestone | manual"
+            "description": "Creates a DRAFT. unlockAt is when it opens; unlockTimezone is the zone the sender meant, kept separately so a message for a daughter in Pune scheduled from London does not arrive at 03:00 her time.\n\nunlockKind: datetime | milestone | manual\n\nunlockKind is datetime (needs unlockAt), manual (sealed but never scheduled — released by hand), or milestone (needs milestoneMemberId, a members.id). No endpoint creates members yet, so milestone cannot be exercised from here."
           },
           "event": [
             {
@@ -804,6 +855,136 @@
             },
             "description": "Idempotent — the primary key makes a retry a no-op. Send twice and watch added drop to 0 while total stays the same."
           }
+        },
+        {
+          "name": "PATCH /capsules/:id — while a draft",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}"
+              ]
+            },
+            "description": "A draft is freely editable: title, note, unlockAt, unlockTimezone. Send only what changes; null clears title, note or unlockTimezone.\n\nAfter the seal, the same request works only inside the 15-minute grace window (see the request after the seal).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"For your eighteenth birthday\",\n  \"note\": \"You were asleep on my shoulder when I wrote this. You still are, as I edit it.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "pm.test('still a draft',()=>pm.expect(pm.response.json().state).to.eql('draft'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /capsules/:id/recipients — by phone (to remove)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/recipients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "recipients"
+              ]
+            },
+            "description": "A recipient needs an email or a phone. preferredChannel is push, email, sms or whatsapp, and the matching field is required: sms and whatsapp need phone, email needs email.\n\nAdded here only to be removed by the next request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rohan\",\n  \"phone\": \"+919800000000\",\n  \"preferredChannel\": \"sms\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201',()=>pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('extraRecipientId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /capsules/:id/recipients/:recipientId",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/recipients/{{extraRecipientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "capsules",
+                "{{capsuleId}}",
+                "recipients",
+                "{{extraRecipientId}}"
+              ]
+            },
+            "description": "Only while the capsule is a draft. Once sealed, its recipients are settled: 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "pm.test('removed',()=>pm.expect(pm.response.json().removed).to.eql(true));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "POST /capsules/:id/seal  ← the moment",
@@ -939,6 +1120,54 @@
               ]
             }
           }
+        },
+        {
+          "name": "GET /vaults/:vaultId/capsules — sealed only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules?limit=50&state=sealed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vaults",
+                "{{vaultId}}",
+                "capsules"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "state",
+                  "value": "sealed"
+                }
+              ]
+            },
+            "description": "state filters by one of: draft, sealed, delivering, delivered, opened, cancelled, failed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200',()=>pm.response.to.have.status(200));",
+                  "pm.test('only sealed',()=>pm.response.json().capsules.forEach(x=>pm.expect(x.state).to.eql('sealed')));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "GET /open/:token — before delivery (expect 404)",
