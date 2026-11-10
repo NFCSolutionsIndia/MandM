@@ -207,20 +207,23 @@ export class CapsulesService {
   }
 
   /**
-   * Add somebody to reach, and mint the credential that will open the capsule
-   * for them.
+   * Add somebody to reach.
    *
    * ═════════════════════════════════════════════════════════════════════════
-   *  The raw token is returned ONCE and never stored.
+   *  No credential is handed out here. Not even to the sender.
    * ═════════════════════════════════════════════════════════════════════════
    *
-   * Only its SHA-256 reaches the database, so a leaked backup does not hand
-   * over every sealed message in the system. Holding the token early is
-   * harmless: `app_resolve_recipient` refuses it until the capsule is
-   * actually delivered.
+   * The token that opens the capsule is minted by the worker at delivery and
+   * travels only in the message that delivers it. A sender who held one could
+   * open the capsule the moment it arrived, and "she opened it on her
+   * eighteenth birthday" would record the sender's click instead.
+   *
+   * `access_token_hash` is NOT NULL and unique, so this stores the digest of a
+   * random value that is then discarded. It is a placeholder no link was ever
+   * built from; the worker overwrites it before the first send.
    */
   async addRecipient(capsuleId: string, body: AddRecipientDto) {
-    const token = generateSessionToken();
+    const placeholder = hashToken(generateSessionToken());
 
     return translatingPgErrors(() =>
       this.db.tx(async (tx) => {
@@ -247,14 +250,14 @@ export class CapsulesService {
           VALUES (uuid_generate_v7(), ${capsuleId}, ${c.vault_id},
                   ${body.memberId ?? null}, ${body.name}, ${body.email ?? null},
                   ${body.phone ?? null}, ${body.preferredChannel},
-                  ${hashToken(token)})
+                  ${placeholder})
           RETURNING id
         `);
 
         const row = created.rows[0];
         if (!row) throw new NotFoundException();
 
-        return { id: row.id, accessToken: token, shownOnce: true };
+        return { id: row.id };
       }),
     );
   }

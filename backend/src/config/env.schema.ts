@@ -101,6 +101,22 @@ export const envSchema = z.object({
   WORKER_IDLE_SECONDS: z.coerce.number().int().positive().default(5),
 
   /**
+   * Where a delivered capsule's link points. The token is appended as the
+   * last path segment: `<OPEN_LINK_BASE_URL>/<token>`.
+   *
+   * Read only by the worker, which mints the token at delivery time. Absent
+   * in development, it falls back to the API's own `GET /api/v1/open` on
+   * localhost. In production the worker refuses to deliver without it rather
+   * than send a link to localhost: that would be a capsule that arrived and
+   * could not be opened.
+   */
+  OPEN_LINK_BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .transform((v) => v?.replace(/\/+$/, '')),
+
+  /**
    * 32 bytes, base64, for the `_enc` columns on `admin_users`.
    *
    * A TOTP secret cannot be hashed — the server has to reproduce it to

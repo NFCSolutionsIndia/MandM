@@ -804,7 +804,7 @@
                 "recipients"
               ]
             },
-            "description": "Returns accessToken ONCE. Only its SHA-256 reaches the database, so a leaked backup does not hand over every sealed message.\n\nHolding it early is harmless — it opens nothing until the capsule is actually delivered."
+            "description": "Returns only the recipient's id. No credential is handed out — not even to the sender.\n\nThe token that opens the capsule is minted by the worker at delivery and travels only in the message that delivers it. A sender holding one could open the capsule first and become \"the first opening\".\n\nTo try the /open requests locally: run the worker (npm run worker:dev), let it deliver, and paste the token from its `[dev] ... link:` log line into the accessToken collection variable."
           },
           "event": [
             {
@@ -815,8 +815,7 @@
                   "pm.test('201',()=>pm.response.to.have.status(201));",
                   "const b=pm.response.json();",
                   "pm.collectionVariables.set('recipientId', b.id);",
-                  "pm.collectionVariables.set('accessToken', b.accessToken);",
-                  "console.log('Access token captured — it is never returned again.');"
+                  "pm.test('no credential for the sender',()=>pm.expect(b).to.not.have.property('accessToken'));"
                 ]
               }
             }
@@ -1206,7 +1205,7 @@
                 "{{accessToken}}"
               ]
             },
-            "description": "Works once state is delivered. To try it now, mark it delivered by hand:\n\n  docker exec mm-postgres psql -U postgres -d mm_dev -c \\\"UPDATE capsules SET state='delivered', delivered_at=now() WHERE id='<capsuleId>';\\\"\n\nRecords the FIRST opening only — refresh and firstOpenedAt does not move."
+            "description": "Works once the worker has delivered the capsule. The token is the last path segment of the link in the delivery message; locally, the worker logs it as `[dev] ... link: <OPEN_LINK_BASE_URL>/<token>`. Copy that token into the accessToken collection variable.\n\nEach delivery attempt mints a new token and revokes the previous one, so use the token from the latest log line.\n\nRecords the FIRST opening only — refresh and firstOpenedAt does not move."
           }
         },
         {

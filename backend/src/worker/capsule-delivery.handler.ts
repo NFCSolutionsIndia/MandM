@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { sql } from 'drizzle-orm';
 
+import { generateSessionToken, hashToken } from '../auth/tokens.js';
+import type { Env } from '../config/env.schema.js';
 import { DbService } from '../db/db.service.js';
 import { DeliveryGateway } from './delivery.gateway.js';
 import type { ClaimedJob } from './job-queue.service.js';
@@ -25,15 +28,39 @@ import type { ClaimedJob } from './job-queue.service.js';
  * Of the two failures, a delayed capsule is recoverable and a duplicate is
  * not. The ordering chooses accordingly, and `ux_attempt_idempotent` is what
  * enforces it.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  The link is minted here, at delivery, and nowhere else.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Nobody holds a working token before the capsule arrives — not the sender,
+ * not a backup. Each attempt mints a fresh one in the SAME transaction that
+ * reserves the attempt: the new hash replaces the old and `token_version`
+ * moves on. The raw token exists only in memory and then in the message.
+ *
+ * So every attempt's link revokes the one before it. If a provider said
+ * "failed" but the message got through anyway, that earlier link dies when the
+ * retry goes out. The retry carries a working link of its own, which costs
+ * far less than a credential that outlives the message it was sent in.
  */
 @Injectable()
 export class CapsuleDeliveryHandler {
   private readonly logger = new Logger(CapsuleDeliveryHandler.name);
+  private readonly linkBase: string | null;
 
   constructor(
     private readonly db: DbService,
     private readonly gateway: DeliveryGateway,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    const configured = config.get('OPEN_LINK_BASE_URL', { infer: true });
+    const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
+    const port = config.get('PORT', { infer: true });
+
+    this.linkBase =
+      configured ??
+      (isProduction ? null : `http://localhost:${port}/api/v1/open`);
+  }
 
   async handle(job: ClaimedJob): Promise<void> {
     const capsuleId = job.payload.capsuleId;
@@ -41,6 +68,16 @@ export class CapsuleDeliveryHandler {
     if (typeof capsuleId !== 'string') {
       // Not retryable. A malformed payload will be malformed again in a day.
       throw new Error(`Job ${job.id} has no capsuleId in its payload`);
+    }
+
+    if (!this.linkBase) {
+      // Checked before anything is reserved or rotated, so a misconfigured
+      // deploy leaves no half-made attempt behind. It fails the job, which
+      // retries in a day — enough time to set the variable.
+      throw new Error(
+        'OPEN_LINK_BASE_URL is not set. Refusing to deliver a capsule ' +
+          'whose link would point nowhere.',
+      );
     }
 
     const recipients = await this.db.workerTx((tx) =>
@@ -99,7 +136,12 @@ export class CapsuleDeliveryHandler {
         continue;
       }
 
-      const outcome = await this.deliverTo(capsuleId, r.recipient_id, r.channel);
+      const outcome = await this.deliverTo(
+        capsuleId,
+        r.recipient_id,
+        r.channel,
+        this.linkBase,
+      );
       if (outcome === 'delivered' || outcome === 'already') delivered++;
       else failed++;
     }
@@ -136,11 +178,16 @@ export class CapsuleDeliveryHandler {
     capsuleId: string,
     recipientId: string,
     channel: string,
+    linkBase: string,
   ): Promise<'delivered' | 'failed' | 'already'> {
-    // 1 · Reserve. ON CONFLICT DO NOTHING turns a crashed-then-retried worker
-    //     into a no-op rather than a second send.
-    const reserved = await this.db.workerTx((tx) =>
-      tx.execute<{ id: string; attempt_no: number }>(sql`
+    // The credential this attempt will carry. Only its hash is written.
+    const token = generateSessionToken();
+
+    // 1 · Reserve, and rotate the recipient's token, in one transaction. If
+    //     the reservation is refused the token is never stored, so a losing
+    //     racer cannot revoke the link the winner is about to send.
+    const attempt = await this.db.workerTx(async (tx) => {
+      const reserved = await tx.execute<{ id: string; attempt_no: number }>(sql`
         INSERT INTO delivery_attempts
           (id, capsule_id, recipient_id, channel, attempt_no, provider, status, attempted_at)
         SELECT uuid_generate_v7(), ${capsuleId}, ${recipientId}, ${channel},
@@ -152,10 +199,20 @@ export class CapsuleDeliveryHandler {
            AND channel = ${channel}
         ON CONFLICT DO NOTHING
         RETURNING id, attempt_no
-      `),
-    );
+      `);
 
-    const attempt = reserved.rows[0];
+      const row = reserved.rows[0];
+      if (!row) return undefined;
+
+      await tx.execute(sql`
+        UPDATE capsule_recipients
+           SET access_token_hash = ${hashToken(token)},
+               token_version     = token_version + 1
+         WHERE id = ${recipientId}
+      `);
+
+      return row;
+    });
 
     if (!attempt) {
       // The unique key refused it: this exact attempt already exists, so the
@@ -167,7 +224,12 @@ export class CapsuleDeliveryHandler {
     }
 
     // 2 · Send.
-    const result = await this.gateway.send(channel, recipientId, capsuleId);
+    const result = await this.gateway.send({
+      channel,
+      recipientId,
+      capsuleId,
+      link: `${linkBase}/${token}`,
+    });
 
     // 3 · Record the outcome against the row reserved in step 1.
     await this.db.workerTx(async (tx) => {

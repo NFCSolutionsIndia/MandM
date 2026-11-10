@@ -1,6 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Pool } from 'pg';
 
+import { hashToken } from '../src/auth/tokens.js';
+import { DeliveryGateway, type DeliveryMessage } from '../src/worker/delivery.gateway.js';
 import { WorkerModule } from '../src/worker/worker.module.js';
 import { JobQueueService } from '../src/worker/job-queue.service.js';
 import { WorkerService } from '../src/worker/worker.service.js';
@@ -33,6 +35,27 @@ describe('the delivery engine', () => {
 
   let capsuleId: string;
   let jobId: string;
+
+  /** Every message the gateway was asked to send, in order. */
+  const sent: DeliveryMessage[] = [];
+
+  /** The raw token in the most recent message to a capsule's recipients. */
+  function lastTokenFor(capsule: string): string {
+    const message = sent.filter((m) => m.capsuleId === capsule).at(-1);
+    if (!message) throw new Error(`nothing was sent for ${capsule}`);
+    return message.link.split('/').at(-1)!;
+  }
+
+  async function recipientOf(capsule: string) {
+    const { rows } = await ownerPool.query<{
+      access_token_hash: string;
+      token_version: number;
+    }>(
+      'SELECT access_token_hash, token_version FROM capsule_recipients WHERE capsule_id = $1',
+      [capsule],
+    );
+    return rows[0];
+  }
 
   /** A sealed capsule, one recipient, one due job. */
   async function seedCapsule(options: {
@@ -92,6 +115,15 @@ describe('the delivery engine', () => {
 
     worker = app.get(WorkerService);
     queue = app.get(JobQueueService);
+
+    // Record what goes out without changing it: the dev gateway still decides
+    // the outcome, so the engine is exercised exactly as it runs locally.
+    const gateway = app.get(DeliveryGateway);
+    const send = gateway.send.bind(gateway);
+    gateway.send = async (message) => {
+      sent.push(message);
+      return send(message);
+    };
   }, 90_000);
 
   afterAll(async () => {
@@ -158,6 +190,36 @@ describe('the delivery engine', () => {
     expect(rows[0].action).toBe('capsule.delivered');
   });
 
+  // ── the link ──────────────────────────────────────────────────────────────
+
+  it('sends a link carrying the token the database now holds', async () => {
+    const token = lastTokenFor(capsuleId);
+    const recipient = await recipientOf(capsuleId);
+
+    expect(sent.find((m) => m.capsuleId === capsuleId)!.link).toMatch(
+      /\/open\/[A-Za-z0-9_-]{43}$/,
+    );
+
+    // Only the digest is stored; the raw value lives in the message alone.
+    expect(recipient.access_token_hash).toBe(hashToken(token));
+    expect(recipient.access_token_hash).not.toBe(token);
+
+    // Minted at delivery, so the version moved past the one set at creation.
+    expect(recipient.token_version).toBe(2);
+  });
+
+  it('revokes whatever hash the recipient held before delivery', async () => {
+    const recipient = await recipientOf(capsuleId);
+
+    // seedCapsule wrote sha256(capsuleId). Anybody holding that value before
+    // the capsule arrived now holds nothing.
+    const { rows } = await ownerPool.query<{ seeded: string }>(
+      `SELECT encode(sha256(($1::uuid)::text::bytea),'hex') AS seeded`,
+      [capsuleId],
+    );
+    expect(recipient.access_token_hash).not.toBe(rows[0].seeded);
+  });
+
   // ── the failure that must never happen ────────────────────────────────────
 
   it('does not send twice when the same job is replayed', async () => {
@@ -194,6 +256,18 @@ describe('the delivery engine', () => {
     await expect(attempt).rejects.toMatchObject({ code: '23505' });
   });
 
+  it('the delivered link opens the capsule', async () => {
+    // After the replay tests on purpose: opening moves the capsule to
+    // `opened`, which the worker's policies no longer see.
+    const { rows } = await ownerPool.query<{ capsule: { title: string } | null }>(
+      'SELECT app_open_capsule($1) AS capsule',
+      [hashToken(lastTokenFor(capsuleId))],
+    );
+
+    // The round trip: seal → deliver → the recipient follows the link.
+    expect(rows[0].capsule?.title).toBe('For her eighteenth');
+  });
+
   // ── retries, in days ──────────────────────────────────────────────────────
 
   it('retries a failed channel tomorrow, not in a minute', async () => {
@@ -226,6 +300,26 @@ describe('the delivery engine', () => {
     );
     // Visibly undelivered, not quietly marked done.
     expect(capsule[0].state).toBe('delivering');
+  });
+
+  it('mints a new link for every retry, and the last one stops working', async () => {
+    const seeded = await seedCapsule({ channel: 'sms' });
+
+    await worker.tick();
+    const first = lastTokenFor(seeded.capsuleId);
+
+    await ownerPool.query(
+      `UPDATE scheduled_jobs SET state = 'pending', run_at = now() - interval '1 minute' WHERE id = $1`,
+      [seeded.jobId],
+    );
+    await worker.tick();
+    const second = lastTokenFor(seeded.capsuleId);
+
+    const recipient = await recipientOf(seeded.capsuleId);
+
+    expect(second).not.toBe(first);
+    expect(recipient.access_token_hash).toBe(hashToken(second));
+    expect(recipient.token_version).toBe(3);
   });
 
   it('gives up after five attempts and goes dead, not round again', async () => {

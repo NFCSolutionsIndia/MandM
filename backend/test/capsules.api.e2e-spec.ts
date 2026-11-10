@@ -7,7 +7,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
 import { AppModule } from '../src/app.module.js';
-import { hashToken } from '../src/auth/tokens.js';
+import { generateSessionToken, hashToken } from '../src/auth/tokens.js';
 import { connect, disconnect, resetDatabase, type Harness } from './support/database.js';
 
 /**
@@ -169,32 +169,36 @@ describe('capsules API', () => {
     expect(res.body.message).toContain('recipient');
   });
 
-  it('adds a recipient and returns the access token exactly once', async () => {
+  it('adds a recipient and hands the sender no credential', async () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/capsules/${capsuleId}/recipients`)
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Aarti', email: 'aarti@example.com' })
       .expect(201);
 
-    expect(res.body.accessToken).toBeTypeOf('string');
-    accessToken = res.body.accessToken;
+    // The link is minted by the worker at delivery. A sender holding one could
+    // open the capsule first and become "the first opening".
+    expect(res.body).toEqual({ id: expect.any(String) });
 
-    // Only the digest reaches the database.
-    const { rows } = await harness.ownerPool.query<{ access_token_hash: string }>(
-      `SELECT access_token_hash FROM capsule_recipients WHERE id = $1`,
-      [res.body.id],
+    // The stand-in for what the worker does at delivery (worker.e2e-spec proves
+    // the worker itself): a fresh token, only its digest written. Minting it
+    // now also lets the next tests show an early-held token opens nothing.
+    accessToken = generateSessionToken();
+    await harness.ownerPool.query(
+      `UPDATE capsule_recipients SET access_token_hash = $2 WHERE id = $1`,
+      [res.body.id, hashToken(accessToken)],
     );
-    expect(rows[0].access_token_hash).toBe(hashToken(accessToken));
-    expect(rows[0].access_token_hash).not.toBe(accessToken);
   });
 
-  it('does not return the token again when reading the capsule', async () => {
+  it('never exposes the recipient’s token or its hash when reading the capsule', async () => {
     const res = await request(app.getHttpServer())
       .get(`/api/v1/capsules/${capsuleId}`)
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(JSON.stringify(res.body)).not.toContain(accessToken);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain(accessToken);
+    expect(body).not.toContain(hashToken(accessToken));
     expect(res.body.recipients).toHaveLength(1);
   });
 

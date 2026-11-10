@@ -3922,6 +3922,7 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `WORKER_LEASE_SECONDS` | no | 300. How long a claimed job is leased |
 | `WORKER_BATCH_SIZE` | no | 25. Jobs per tick |
 | `WORKER_IDLE_SECONDS` | no | 5. Sleep when the queue came back empty |
+| `OPEN_LINK_BASE_URL` | worker, production | Where a delivered capsule's link points; the token is appended as the last path segment. Defaults to `http://localhost:$PORT/api/v1/open` outside production. **In production the worker refuses to deliver without it** rather than send a link that cannot be opened. No value yet: the recipient's landing page does not exist |
 | `TEST_WORKER_DATABASE_URL` | tests only | must name `mm_test` |
 
 ### Providers

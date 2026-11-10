@@ -10,6 +10,20 @@ export interface SendResult {
 }
 
 /**
+ * One message to one recipient.
+ *
+ * `link` carries the raw access token. The worker minted it moments ago, stored
+ * only its hash, and this object is the only place the raw value lives. It
+ * goes into the message and is never logged in production or written anywhere.
+ */
+export interface DeliveryMessage {
+  channel: string;
+  recipientId: string;
+  capsuleId: string;
+  link: string;
+}
+
+/**
  * Where a capsule actually goes.
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -55,11 +69,9 @@ export class DeliveryGateway {
     }
   }
 
-  async send(
-    channel: string,
-    recipientId: string,
-    capsuleId: string,
-  ): Promise<SendResult> {
+  async send(message: DeliveryMessage): Promise<SendResult> {
+    const { channel, recipientId, capsuleId, link } = message;
+
     if (this.isProduction) {
       throw new Error(
         'No delivery provider is configured. Refusing to mark a capsule ' +
@@ -73,9 +85,13 @@ export class DeliveryGateway {
       return { ok: false, errorCode: 'channel_not_implemented' };
     }
 
+    // The full link, credential included, because in development the console
+    // IS the inbox: this is how you open a capsule you delivered locally. The
+    // production branch above never reaches this line.
     this.logger.log(
       `[dev] would send capsule ${capsuleId.slice(0, 13)} to recipient ` +
-        `${recipientId.slice(0, 13)} over ${channel}`,
+        `${recipientId.slice(0, 13)} over ${channel}\n` +
+        `      link: ${link}`,
     );
 
     return {
