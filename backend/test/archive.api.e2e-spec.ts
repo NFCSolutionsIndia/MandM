@@ -113,7 +113,7 @@ describe('archive API', () => {
       .send({ email, code })
       .expect(200);
 
-    return res.body.token;
+    return res.body.accessToken;
   }
 
   beforeAll(async () => {

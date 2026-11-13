@@ -127,6 +127,20 @@
       "when": 1793343449137,
       "tag": "0017_support_role",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794567393321,
+      "tag": "0018_usernames",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794567454649,
+      "tag": "0019_access_and_refresh_tokens",
+      "breakpoints": true
     }
   ]
 }

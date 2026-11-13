@@ -18,12 +18,14 @@ import { ActorContext } from '../db/actor-context.js';
 import { DbService } from '../db/db.service.js';
 import { Public } from './auth.guard.js';
 import {
+  refreshSchema,
   requestCodeSchema,
   verifyCodeSchema,
+  type RefreshDto,
   type RequestCodeDto,
   type VerifyCodeDto,
 } from './auth.dto.js';
-import { AuthService } from './auth.service.js';
+import { AuthService, type SessionPair } from './auth.service.js';
 import { hashToken } from './tokens.js';
 
 @Controller('auth')
@@ -56,7 +58,7 @@ export class AuthController {
   }
 
   /**
-   * Redeem a code and get a session token.
+   * Redeem a code and open a session: an access token and a refresh token.
    *
    * One 401 for every failure: wrong code, expired code, too many attempts, no
    * code at all. Distinguishing them would tell an attacker which part of the
@@ -82,12 +84,47 @@ export class AuthController {
       throw new UnauthorizedException('That code is not valid.');
     }
 
+    const { isNewAccount, ...pair } = result;
+    return { ...this.body(pair), isNewAccount, user: pair.user };
+  }
+
+  /**
+   * Exchange a refresh token for a new pair.
+   *
+   * Public: the access token has usually expired by the time this is called,
+   * which is the point. The refresh token in the body is the credential.
+   *
+   * One 401 for expired, idle, revoked, unknown and reused alike — and the
+   * client's answer to every one of them is the same: sign out. A reused
+   * token has also revoked the session it belonged to by the time this
+   * returns.
+   */
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(refreshSchema))
+  async refresh(@Body() body: RefreshDto) {
+    const pair = await this.auth.refresh(body.refreshToken);
+
+    if (!pair) {
+      throw new UnauthorizedException('Session expired. Sign in again.');
+    }
+
+    return { ...this.body(pair), user: pair.user };
+  }
+
+  /**
+   * The shared part of `/verify` and `/refresh`.
+   *
+   * The only time either raw token exists outside the client. The database
+   * holds their SHA-256 and nothing else.
+   */
+  private body(pair: SessionPair) {
     return {
-      // The only time this value ever exists outside the client. The database
-      // holds its SHA-256 and nothing else.
-      token: result.token,
-      expiresInDays: result.expiresInDays,
-      isNewAccount: result.isNewAccount,
+      accessToken: pair.accessToken,
+      accessExpiresAt: pair.accessExpiresAt.toISOString(),
+      refreshToken: pair.refreshToken,
+      refreshExpiresAt: pair.refreshExpiresAt.toISOString(),
     };
   }
 
@@ -98,11 +135,12 @@ export class AuthController {
       tx.execute<{
         id: string;
         email: string;
+        username: string;
         name: string;
         plan: string;
         created_at: Date;
       }>(
-        sql`SELECT id, email, name, plan, created_at
+        sql`SELECT id, email, username, name, plan, created_at
               FROM users
              WHERE id = app_current_user()`,
       ),
@@ -117,6 +155,7 @@ export class AuthController {
     return {
       id: user.id,
       email: user.email,
+      username: user.username,
       name: user.name,
       plan: user.plan,
       createdAt: user.created_at,

@@ -32,6 +32,7 @@ describe('authentication, end to end', () => {
   const BINA = 'bina@example.com';
 
   let aaravToken: string;
+  let aaravRefresh: string;
   let binaToken: string;
   let aaravVaultId: string;
 
@@ -133,21 +134,46 @@ describe('authentication, end to end', () => {
       .expect(200);
 
     expect(res.body.isNewAccount).toBe(true);
-    expect(res.body.token).toBeTruthy();
-    expect(res.body.expiresInDays).toBe(30);
+    expect(res.body.accessToken).toBeTruthy();
+    expect(res.body.refreshToken).toBeTruthy();
+    expect(res.body.refreshToken).not.toBe(res.body.accessToken);
 
-    aaravToken = res.body.token;
+    // ACCESS_TOKEN_HOURS and REFRESH_TOKEN_DAYS at their defaults.
+    const hours = (iso: string) => (Date.parse(iso) - Date.now()) / 3_600_000;
+    expect(hours(res.body.accessExpiresAt)).toBeCloseTo(24, 0);
+    expect(hours(res.body.refreshExpiresAt) / 24).toBeCloseTo(30, 0);
+
+    expect(res.body.user).toEqual({
+      id: expect.any(String),
+      username: 'aarav',
+      name: 'aarav',
+    });
+    // The response is the whole contract; nothing private rides along.
+    expect(Object.keys(res.body).sort()).toEqual([
+      'accessExpiresAt',
+      'accessToken',
+      'isNewAccount',
+      'refreshExpiresAt',
+      'refreshToken',
+      'user',
+    ]);
+
+    aaravToken = res.body.accessToken;
+    aaravRefresh = res.body.refreshToken;
   });
 
-  it('stores only the hash of the token it handed out', async () => {
-    const { rows } = await harness.ownerPool.query<{ token_hash: string }>(
-      'SELECT token_hash FROM sessions',
-    );
+  it('stores only the hashes of the tokens it handed out', async () => {
+    const { rows } = await harness.ownerPool.query<{
+      access_token_hash: string;
+      refresh_token_hash: string;
+    }>('SELECT access_token_hash, refresh_token_hash FROM sessions');
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].token_hash).toBe(hashToken(aaravToken));
+    expect(rows[0].access_token_hash).toBe(hashToken(aaravToken));
+    expect(rows[0].refresh_token_hash).toBe(hashToken(aaravRefresh));
     // The property that survives a leaked backup.
-    expect(rows[0].token_hash).not.toBe(aaravToken);
+    expect(rows[0].access_token_hash).not.toBe(aaravToken);
+    expect(rows[0].refresh_token_hash).not.toBe(aaravRefresh);
   });
 
   it('mints UUIDv7 ids even for rows created inside SQL functions', async () => {
@@ -196,6 +222,7 @@ describe('authentication, end to end', () => {
       .expect(200);
 
     expect(res.body.email).toBe(AARAV);
+    expect(res.body.username).toBe('aarav');
     expect(res.body.actor).toBe(res.body.id);
 
     // /me has no WHERE clause naming a user id from the request — it selects
@@ -216,7 +243,7 @@ describe('authentication, end to end', () => {
       .send({ email: BINA, code: await codeFor(BINA) })
       .expect(200);
 
-    binaToken = res.body.token;
+    binaToken = res.body.accessToken;
   });
 
   it('creates a vault and its ownership row in one transaction', async () => {
@@ -302,6 +329,243 @@ describe('authentication, end to end', () => {
     // The security log has to be able to explain itself.
     expect(rows).toHaveLength(2);
     expect(rows.filter((r) => r.revoked_at !== null)).toHaveLength(1);
+  });
+
+  // ── access, refresh, idle ─────────────────────────────────────────────────
+  //
+  // Nothing here sleeps. Time passes by moving a session's timestamps
+  // backwards through the owner connection, which is what a day going by
+  // looks like to every function that reads them.
+
+  interface Pair {
+    accessToken: string;
+    refreshToken: string;
+  }
+
+  /** A fresh session for `email`, through the real sign-in flow. */
+  async function signIn(email: string): Promise<Pair> {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({ email })
+      .expect(202);
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/verify')
+      .send({ email, code: await codeFor(email) })
+      .expect(200);
+    return res.body;
+  }
+
+  function me(accessToken: string) {
+    return request(app.getHttpServer())
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  function refresh(refreshToken: string) {
+    return request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .send({ refreshToken });
+  }
+
+  /** Runs `assignments` against the session that `accessToken` opened. */
+  async function shift(accessToken: string, assignments: string) {
+    const { rowCount } = await harness.ownerPool.query(
+      `UPDATE sessions SET ${assignments} WHERE access_token_hash = $1`,
+      [hashToken(accessToken)],
+    );
+    expect(rowCount).toBe(1);
+  }
+
+  /** `days` pass for this session, with nobody touching it. */
+  function age(accessToken: string, days: number) {
+    const by = `interval '${days} days'`;
+    return shift(
+      accessToken,
+      `access_expires_at  = access_expires_at  - ${by},
+       refresh_expires_at = refresh_expires_at - ${by},
+       last_active_at     = last_active_at     - ${by}`,
+    );
+  }
+
+  async function revokedAt(accessToken: string): Promise<Date | null> {
+    const { rows } = await harness.ownerPool.query<{ revoked_at: Date | null }>(
+      'SELECT revoked_at FROM sessions WHERE access_token_hash = $1',
+      [hashToken(accessToken)],
+    );
+    return rows[0]?.revoked_at ?? null;
+  }
+
+  it('refuses a refresh token used as a bearer', async () => {
+    // A refresh token lives in a different column; resolve never looks there.
+    await me(aaravRefresh).expect(401);
+    await me(aaravToken).expect(200);
+  });
+
+  it('rejects an access token 24 hours after issue, and a refresh then works', async () => {
+    const s = await signIn('chandra@example.com');
+    await me(s.accessToken).expect(200);
+
+    await shift(s.accessToken, `access_expires_at = now() - interval '1 second'`);
+    await me(s.accessToken).expect(401);
+
+    const res = await refresh(s.refreshToken).expect(200);
+    expect(res.body.accessToken).not.toBe(s.accessToken);
+    expect(res.body.refreshToken).not.toBe(s.refreshToken);
+    expect(res.body.user.username).toBe('chandra');
+    // Same shape as /verify, minus isNewAccount.
+    expect(Object.keys(res.body).sort()).toEqual([
+      'accessExpiresAt',
+      'accessToken',
+      'refreshExpiresAt',
+      'refreshToken',
+      'user',
+    ]);
+
+    await me(res.body.accessToken).expect(200);
+  });
+
+  it('retires the previous access token on refresh, even if it had time left', async () => {
+    const s = await signIn('devi@example.com');
+    const next = (await refresh(s.refreshToken).expect(200)).body as Pair;
+
+    await me(s.accessToken).expect(401);
+    await me(next.accessToken).expect(200);
+  });
+
+  it('treats a refresh token used twice as stolen and revokes the session', async () => {
+    const s = await signIn('esha@example.com');
+    const second = (await refresh(s.refreshToken).expect(200)).body as Pair;
+    const third = (await refresh(second.refreshToken).expect(200)).body as Pair;
+    await me(third.accessToken).expect(200);
+
+    // The FIRST token, two rotations ago: still recognised as reused.
+    await refresh(s.refreshToken).expect(401);
+
+    // And the session is gone for whoever held the newest pair, too.
+    await me(third.accessToken).expect(401);
+    await refresh(third.refreshToken).expect(401);
+    expect(await revokedAt(third.accessToken)).not.toBeNull();
+  });
+
+  it('answers an unknown refresh token with a flat 401 and revokes nothing', async () => {
+    const s = await signIn('farah@example.com');
+
+    await refresh('not-a-real-refresh-token').expect(401);
+    await refresh('').expect(400);
+
+    await me(s.accessToken).expect(200);
+    expect(await revokedAt(s.accessToken)).toBeNull();
+  });
+
+  it('ends a session idle for 7 days, for both tokens', async () => {
+    const s = await signIn('gita@example.com');
+
+    // Six days idle: still a session. Its 24-hour access token has long
+    // gone, but a refresh brings it back.
+    await age(s.accessToken, 6);
+    const back = (await refresh(s.refreshToken).expect(200)).body as Pair;
+
+    // Eight days idle: over, whichever token is presented. The access token
+    // is given a future expiry so the idle limit is the only thing failing.
+    await age(back.accessToken, 8);
+    await shift(back.accessToken, `access_expires_at = now() + interval '1 hour'`);
+
+    await me(back.accessToken).expect(401);
+    await refresh(back.refreshToken).expect(401);
+  });
+
+  it('refuses a refresh token past its own expiry', async () => {
+    const s = await signIn('hari@example.com');
+    await shift(s.accessToken, `refresh_expires_at = now() - interval '1 second'`);
+
+    await refresh(s.refreshToken).expect(401);
+  });
+
+  it('never signs out somebody who is active every day (rolling refresh)', async () => {
+    let s = await signIn('indu@example.com');
+
+    // Forty days — ten past the 30-day refresh lifetime — of opening the app
+    // once a day: the access token has expired, the client refreshes, and
+    // carries on.
+    for (let day = 1; day <= 40; day++) {
+      await age(s.accessToken, 1);
+      await me(s.accessToken).expect(401);
+
+      s = (await refresh(s.refreshToken).expect(200)).body as Pair;
+      await me(s.accessToken).expect(200);
+    }
+  }, 60_000);
+
+  it('records activity at most once an hour', async () => {
+    const s = await signIn('jaya@example.com');
+    const hash = hashToken(s.accessToken);
+
+    const lastActive = async () =>
+      (
+        await harness.ownerPool.query<{ t: Date }>(
+          'SELECT last_active_at AS t FROM sessions WHERE access_token_hash = $1',
+          [hash],
+        )
+      ).rows[0].t.getTime();
+
+    // Called directly, as the application role, so the assertion does not
+    // race the middleware's fire-and-forget call.
+    const touch = () =>
+      harness.appPool.query('SELECT app_touch_session($1)', [hash]);
+
+    await shift(s.accessToken, `last_active_at = now() - interval '30 minutes'`);
+    const before = await lastActive();
+    await touch();
+    expect(await lastActive()).toBe(before);
+
+    await shift(s.accessToken, `last_active_at = now() - interval '61 minutes'`);
+    await touch();
+    expect(Date.now() - (await lastActive())).toBeLessThan(60_000);
+  });
+
+  it('makes sign-out final for the refresh token too', async () => {
+    const s = await signIn('kiran@example.com');
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/sign-out')
+      .set('Authorization', `Bearer ${s.accessToken}`)
+      .expect(204);
+
+    await me(s.accessToken).expect(401);
+    await refresh(s.refreshToken).expect(401);
+  });
+
+  it('makes sign-out-others take effect on the very next request', async () => {
+    const phone = await signIn('lata@example.com');
+    const laptop = await signIn('lata@example.com');
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/sign-out-others')
+      .set('Authorization', `Bearer ${laptop.accessToken}`)
+      .expect(200);
+    expect(res.body.revoked).toBe(1);
+
+    await me(phone.accessToken).expect(401);
+    await refresh(phone.refreshToken).expect(401);
+    await me(laptop.accessToken).expect(200);
+  });
+
+  // ── usernames ─────────────────────────────────────────────────────────────
+
+  it('gives a second "aarav" a different handle', async () => {
+    const s = await signIn('Aarav@elsewhere.example');
+    const res = await me(s.accessToken).expect(200);
+
+    expect(res.body.username).toMatch(/^aarav\d{4}$/);
+  });
+
+  it('derives a valid handle from an awkward address', async () => {
+    const s = await signIn('_a+b@example.com');
+    const res = await me(s.accessToken).expect(200);
+
+    // `+` is dropped, the leading underscore trimmed, and two characters is
+    // too short — so it is prefixed rather than rejected.
+    expect(res.body.username).toBe('userab');
   });
 
   it('leaves the health endpoints outside the versioned prefix', async () => {

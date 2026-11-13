@@ -166,6 +166,33 @@ export const envSchema = z.object({
    */
   DB_IDLE_TX_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  // ─── Sessions ──────────────────────────────────────────────────────────
+  //
+  // Two opaque tokens per session (decision D-2: rows, not JWTs, so
+  // revocation is immediate). Read through ConfigService and passed into the
+  // SQL functions in migration 0019 as arguments — nothing else reads them.
+
+  /**
+   * How long an ACCESS token works. It is what travels on every request, so
+   * it is the one most likely to leak — from a log line, a proxy, a crash
+   * report — and a short life bounds what a leaked one is worth.
+   */
+  ACCESS_TOKEN_HOURS: z.coerce.number().int().positive().max(24 * 7).default(24),
+
+  /**
+   * How long a REFRESH token works if it is never used. Rolling (decision
+   * D-1): every refresh issues a new one with a fresh window, so somebody
+   * who opens the app every day is never signed out.
+   */
+  REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().max(365).default(30),
+
+  /**
+   * A session with no request and no refresh for this long is over, for
+   * both tokens. A phone left in a drawer should not still be signed in a
+   * month later.
+   */
+  SESSION_IDLE_DAYS: z.coerce.number().int().positive().max(365).default(7),
+
   // ─── Email ─────────────────────────────────────────────────────────────
 
   /**

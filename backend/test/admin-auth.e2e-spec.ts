@@ -305,7 +305,7 @@ describe('admin authentication', () => {
 
     await request(app.getHttpServer())
       .get('/api/v1/admin/v1/auth/me')
-      .set('Authorization', `Bearer ${signIn.body.token}`)
+      .set('Authorization', `Bearer ${signIn.body.accessToken}`)
       .expect(401);
 
     // The boundary that `admin_users` being its own table exists to draw: a

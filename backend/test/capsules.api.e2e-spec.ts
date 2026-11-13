@@ -64,7 +64,7 @@ describe('capsules API', () => {
       .send({ email, code: await codeFor(email) })
       .expect(200);
 
-    return res.body.token;
+    return res.body.accessToken;
   }
 
   beforeAll(async () => {

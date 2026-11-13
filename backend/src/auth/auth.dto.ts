@@ -42,5 +42,15 @@ export const verifyCodeSchema = z.object({
     .regex(/^\d{6}$/, 'must be six digits'),
 });
 
+export const refreshSchema = z.object({
+  /**
+   * The raw refresh token from `/auth/verify` or the previous `/auth/refresh`.
+   * 43 characters of base64url today; the bound only keeps an absurd body
+   * from reaching the hash.
+   */
+  refreshToken: z.string().trim().min(1, 'is required').max(256),
+});
+
 export type RequestCodeDto = z.infer<typeof requestCodeSchema>;
 export type VerifyCodeDto = z.infer<typeof verifyCodeSchema>;
+export type RefreshDto = z.infer<typeof refreshSchema>;

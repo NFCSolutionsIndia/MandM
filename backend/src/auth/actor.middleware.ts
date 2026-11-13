@@ -1,7 +1,9 @@
 import { Injectable, Logger, type NestMiddleware } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { sql } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
+import type { Env } from '../config/env.schema.js';
 import { ActorContext } from '../db/actor-context.js';
 import { DbService } from '../db/db.service.js';
 import { hashToken } from './tokens.js';
@@ -32,10 +34,15 @@ import { hashToken } from './tokens.js';
 export class ActorMiddleware implements NestMiddleware {
   private readonly logger = new Logger(ActorMiddleware.name);
 
-  /** How long a session lives, and how far each use extends it. */
-  private static readonly SESSION_DAYS = 30;
+  /** A session idle for longer than this is refused. See env.schema.ts. */
+  private readonly idleDays: number;
 
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    config: ConfigService<Env, true>,
+  ) {
+    this.idleDays = config.get('SESSION_IDLE_DAYS', { infer: true });
+  }
 
   async use(
     req: FastifyRequest['raw'] & { authUserId?: string },
@@ -53,12 +60,14 @@ export class ActorMiddleware implements NestMiddleware {
 
     let userId: string | null = null;
     try {
-      // `app_resolve_session` is SECURITY DEFINER and checks revocation and
-      // expiry itself. It is the one query that legitimately runs with no
-      // actor, and it returns a single uuid — it cannot list sessions and
-      // cannot be asked about a user.
+      // `app_resolve_session` is SECURITY DEFINER and checks revocation,
+      // access-token expiry and idleness itself. It accepts ACCESS tokens
+      // only — a refresh token sent as a bearer matches nothing. It is the
+      // one query that legitimately runs with no actor, and it returns a
+      // single uuid — it cannot list sessions and cannot be asked about a
+      // user.
       const result = await this.db.raw.execute<{ user_id: string | null }>(
-        sql`SELECT app_resolve_session(${tokenHash}) AS user_id`,
+        sql`SELECT app_resolve_session(${tokenHash}, ${this.idleDays}) AS user_id`,
       );
       userId = result.rows[0]?.user_id ?? null;
     } catch (error) {
@@ -77,12 +86,11 @@ export class ActorMiddleware implements NestMiddleware {
       return;
     }
 
-    // Extend a session that is being used. The function is a no-op unless the
-    // expiry is actually approaching, so this is not a write on every request.
+    // Record that the session is in use, for the idle limit. It extends
+    // nothing — only /auth/refresh moves an expiry — and it is a no-op unless
+    // the last record is over an hour old, so it is not a write per request.
     void this.db.raw
-      .execute(
-        sql`SELECT app_touch_session(${tokenHash}, ${ActorMiddleware.SESSION_DAYS})`,
-      )
+      .execute(sql`SELECT app_touch_session(${tokenHash})`)
       .catch((error: Error) =>
         this.logger.warn(`Session touch failed: ${error.message}`),
       );

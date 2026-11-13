@@ -1692,7 +1692,8 @@ database. Four `SECURITY DEFINER` functions do the work instead:
 | `app_issue_email_code` | invalidates any live code first, so a stolen one cannot be held in reserve while the owner requests another |
 | `app_redeem_email_code` | redeems, finds or creates the account, and opens the session — **one call**, because splitting it would mean exposing `users` and `sessions` to a request with no actor |
 | `app_recent_email_code_count` | the rate limit |
-| `app_touch_session` | extends a session in use, and is a no-op unless expiry is near |
+| `app_touch_session` | records activity for the 7-day idle limit, at most once an hour. Since migration 0019 it extends nothing — only `/auth/refresh` moves an expiry |
+| `app_refresh_session` | (migration 0019) exchanges a refresh token for a new pair; a refresh token seen twice revokes the whole session |
 
 **Every failure returns the same thing.** Wrong code, expired code, too many
 attempts, no code at all — one flat 401. The difference between "wrong code"
@@ -1780,7 +1781,8 @@ asserting the version nibble on every id those functions create.
 | | |
 |---|---|
 | `POST /api/v1/auth/request-code` | 202, always |
-| `POST /api/v1/auth/verify` | → `{ token, expiresInDays, isNewAccount }` |
+| `POST /api/v1/auth/verify` | → `{ accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, isNewAccount, user: { id, username, name } }` |
+| `POST /api/v1/auth/refresh` | public. `{ refreshToken }` → a new pair, same shape without `isNewAccount`. 401 when expired, idle 7 days, revoked or reused — the client signs out |
 | `GET  /api/v1/auth/me` | `WHERE id = app_current_user()` — no input can make it return somebody else |
 | `POST /api/v1/auth/sign-out` | revoked on the **next** request, which is why sessions are rows |
 | `POST /api/v1/auth/sign-out-others` | the "I lost my phone" button |
@@ -3938,6 +3940,9 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `R2_ENDPOINT` | no | For anything S3-compatible that is not R2 — MinIO locally, or S3 later. Derived from the account id when absent |
 | `MEDIA_URL_TTL_SECONDS` | no | **300, and a security parameter.** It is the bound on how long a revoked share can still be opened. Ceiling 900 |
 | `UPLOAD_TTL_SECONDS` | no | 86400 |
+| `ACCESS_TOKEN_HOURS` | no | 24. How long an access token works. Ceiling 168 |
+| `REFRESH_TOKEN_DAYS` | no | 30. Rolling — every refresh issues a new refresh token with a fresh window |
+| `SESSION_IDLE_DAYS` | no | 7. No request and no refresh for this long ends the session, for both tokens |
 
 > **The bucket stays private.** Media is served by short-lived signed URLs,
 > never by a public bucket or a public `r2.dev` URL. A public URL cannot be

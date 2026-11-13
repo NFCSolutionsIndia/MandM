@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Moments & Memories",
-    "description": "Every endpoint the product exposes, in the order you would exercise them.\n\nThree realms, and they do not share credentials:\n  • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer)\n  • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)\n  • Health      — /health          no auth\n\nPick an environment: \"M&M — local\" (http://127.0.0.1:3000) or \"M&M — production\" (https://api.72-61-173-62.sslip.io). In production the Admin panel folder answers 404 by design — nginx serves /api/v1/admin/ to nobody outside the server — and GET /vaults/debug/row-counts answers 404 too.\n\nTokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.\n\nSign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>",
+    "description": "Every endpoint the product exposes, in the order you would exercise them.\n\nThree realms, and they do not share credentials:\n  • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer — the ACCESS token; {{refreshToken}} goes only to /auth/refresh)\n  • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)\n  • Health      — /health          no auth\n\nPick an environment: \"M&M — local\" (http://127.0.0.1:3000) or \"M&M — production\" (https://api.72-61-173-62.sslip.io). In production the Admin panel folder answers 404 by design — nginx serves /api/v1/admin/ to nobody outside the server — and GET /vaults/debug/row-counts answers 404 too.\n\nTokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.\n\nSign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -27,6 +27,14 @@
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "previousRefreshToken",
       "value": ""
     },
     {
@@ -199,7 +207,7 @@
                 "verify"
               ]
             },
-            "description": "Set the `code` variable first.\n\nOne flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.\n\nThe token in the response is the only time that value exists outside your client; the database keeps its SHA-256 and nothing else. This script captures it into {{token}}."
+            "description": "Set the `code` variable first.\n\nOne flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.\n\nBREAKING (0029502): the response is now a PAIR of tokens instead of one `token`:\n  • accessToken  — send as `Authorization: Bearer` on every request. Lives ACCESS_TOKEN_HOURS (24 h).\n  • refreshToken — send ONLY to POST /auth/refresh. Lives REFRESH_TOKEN_DAYS (30 days), renewed on every refresh.\nA session with no request and no refresh for SESSION_IDLE_DAYS (7) is over for both.\n\nBoth raw tokens exist only in this response and in your client; the database keeps their SHA-256 and nothing else. This script captures them into {{token}} and {{refreshToken}}."
           },
           "event": [
             {
@@ -209,11 +217,96 @@
                 "exec": [
                   "pm.test('200 OK', () => pm.response.to.have.status(200));",
                   "const b = pm.response.json();",
-                  "pm.collectionVariables.set('token', b.token);",
-                  "pm.test('returned a session token', () => pm.expect(b.token).to.be.a('string'));",
-                  "console.log('isNewAccount:', b.isNewAccount, '| expires in days:', b.expiresInDays);"
+                  "pm.test('returned an access token', () => pm.expect(b.accessToken).to.be.a('string'));",
+                  "pm.test('returned a refresh token', () => pm.expect(b.refreshToken).to.be.a('string'));",
+                  "pm.collectionVariables.set('token', b.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "pm.collectionVariables.set('previousRefreshToken', '');",
+                  "console.log('isNewAccount:', b.isNewAccount, '| user:', b.user && b.user.username, '| access until', b.accessExpiresAt, '| refresh until', b.refreshExpiresAt);"
                 ]
               }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — signed in (new account)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{code}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/verify",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "verify"
+                  ]
+                },
+                "description": "Set the `code` variable first.\n\nOne flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.\n\nBREAKING (0029502): the response is now a PAIR of tokens instead of one `token`:\n  • accessToken  — send as `Authorization: Bearer` on every request. Lives ACCESS_TOKEN_HOURS (24 h).\n  • refreshToken — send ONLY to POST /auth/refresh. Lives REFRESH_TOKEN_DAYS (30 days), renewed on every refresh.\nA session with no request and no refresh for SESSION_IDLE_DAYS (7) is over for both.\n\nBoth raw tokens exist only in this response and in your client; the database keeps their SHA-256 and nothing else. This script captures them into {{token}} and {{refreshToken}}."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"accessToken\": \"mJ3v1c6rG0yQx2b8T5nWkP4sLz9aHf7DdE1uVq0oRtA\",\n  \"accessExpiresAt\": \"2026-11-14T10:00:00.000Z\",\n  \"refreshToken\": \"Yk2pQ8wN5rT1zV7xB3mC9sD4fG6hJ0lA2eU8iO5yRqW\",\n  \"refreshExpiresAt\": \"2026-12-13T10:00:00.000Z\",\n  \"isNewAccount\": true,\n  \"user\": {\n    \"id\": \"019a7b3c-5d2e-7f10-8a4b-1c2d3e4f5a6b\",\n    \"username\": \"aarav.k\",\n    \"name\": \"aarav.k\"\n  }\n}"
+            },
+            {
+              "name": "401 — any wrong, expired or spent code",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{code}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/verify",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "verify"
+                  ]
+                },
+                "description": "Set the `code` variable first.\n\nOne flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.\n\nBREAKING (0029502): the response is now a PAIR of tokens instead of one `token`:\n  • accessToken  — send as `Authorization: Bearer` on every request. Lives ACCESS_TOKEN_HOURS (24 h).\n  • refreshToken — send ONLY to POST /auth/refresh. Lives REFRESH_TOKEN_DAYS (30 days), renewed on every refresh.\nA session with no request and no refresh for SESSION_IDLE_DAYS (7) is over for both.\n\nBoth raw tokens exist only in this response and in your client; the database keeps their SHA-256 and nothing else. This script captures them into {{token}} and {{refreshToken}}."
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 401,\n  \"message\": \"That code is not valid.\",\n  \"error\": \"Unauthorized\"\n}"
             }
           ]
         },
@@ -290,6 +383,135 @@
                   "pm.test('200', () => pm.response.to.have.status(200));"
                 ]
               }
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Public — the access token has usually expired by now, which is the point. The refresh token in the body is the credential.\n\nReturns a NEW access token AND a NEW refresh token, same shape as /auth/verify without isNewAccount. The refresh token you sent stops working immediately, and so does the old access token.\n\n401 for every failure: refresh token expired, session idle over 7 days, revoked (signed out), unknown — or REUSED. A refresh token presented a second time is treated as stolen and the whole session is revoked.\n\nClient rule: on a 401 from any endpoint, call this ONCE and retry the request. If this also returns 401, sign out. Refresh single-flight: two parallel refreshes with the same token look exactly like a reuse and end the session.\n\nThis script stores the new pair into {{token}} and {{refreshToken}}, and keeps the one it replaced in {{previousRefreshToken}} for the reuse example in folder 4."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('returned a new pair', () => { pm.expect(b.accessToken).to.be.a('string'); pm.expect(b.refreshToken).to.be.a('string'); });",
+                  "pm.test('rotated the refresh token', () => pm.expect(b.refreshToken).to.not.eql(pm.collectionVariables.get('refreshToken')));",
+                  "pm.collectionVariables.set('previousRefreshToken', pm.collectionVariables.get('refreshToken'));",
+                  "pm.collectionVariables.set('token', b.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', b.refreshToken);",
+                  "console.log('access until', b.accessExpiresAt, '| refresh until', b.refreshExpiresAt);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — a new pair",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "description": "Public — the access token has usually expired by now, which is the point. The refresh token in the body is the credential.\n\nReturns a NEW access token AND a NEW refresh token, same shape as /auth/verify without isNewAccount. The refresh token you sent stops working immediately, and so does the old access token.\n\n401 for every failure: refresh token expired, session idle over 7 days, revoked (signed out), unknown — or REUSED. A refresh token presented a second time is treated as stolen and the whole session is revoked.\n\nClient rule: on a 401 from any endpoint, call this ONCE and retry the request. If this also returns 401, sign out. Refresh single-flight: two parallel refreshes with the same token look exactly like a reuse and end the session.\n\nThis script stores the new pair into {{token}} and {{refreshToken}}, and keeps the one it replaced in {{previousRefreshToken}} for the reuse example in folder 4."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"accessToken\": \"mJ3v1c6rG0yQx2b8T5nWkP4sLz9aHf7DdE1uVq0oRtA\",\n  \"accessExpiresAt\": \"2026-11-14T10:00:00.000Z\",\n  \"refreshToken\": \"Yk2pQ8wN5rT1zV7xB3mC9sD4fG6hJ0lA2eU8iO5yRqW\",\n  \"refreshExpiresAt\": \"2026-12-13T10:00:00.000Z\",\n  \"user\": {\n    \"id\": \"019a7b3c-5d2e-7f10-8a4b-1c2d3e4f5a6b\",\n    \"username\": \"aarav.k\",\n    \"name\": \"aarav.k\"\n  }\n}"
+            },
+            {
+              "name": "401 — expired, idle, revoked or reused: sign out",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "description": "Public — the access token has usually expired by now, which is the point. The refresh token in the body is the credential.\n\nReturns a NEW access token AND a NEW refresh token, same shape as /auth/verify without isNewAccount. The refresh token you sent stops working immediately, and so does the old access token.\n\n401 for every failure: refresh token expired, session idle over 7 days, revoked (signed out), unknown — or REUSED. A refresh token presented a second time is treated as stolen and the whole session is revoked.\n\nClient rule: on a 401 from any endpoint, call this ONCE and retry the request. If this also returns 401, sign out. Refresh single-flight: two parallel refreshes with the same token look exactly like a reuse and end the session.\n\nThis script stores the new pair into {{token}} and {{refreshToken}}, and keeps the one it replaced in {{previousRefreshToken}} for the reuse example in folder 4."
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 401,\n  \"message\": \"Session expired. Sign in again.\",\n  \"error\": \"Unauthorized\"\n}"
             }
           ]
         },
@@ -1318,6 +1540,88 @@
             },
             "description": "After this, every request above returns 401 until you sign in again."
           }
+        },
+        {
+          "name": "POST /auth/refresh — reuse an old refresh token (expect 401, revokes the session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{previousRefreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Presents the refresh token that POST /auth/refresh already exchanged. Expect 401 — and the session it belonged to is now revoked, so {{token}} and {{refreshToken}} stop working too.\n\nRun POST /auth/refresh at least once first, or {{previousRefreshToken}} is empty. Run this LAST: it signs you out. Sign in again from folder 1 to continue."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "401 — reuse detected, session revoked",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{previousRefreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "refresh"
+                  ]
+                },
+                "description": "Presents the refresh token that POST /auth/refresh already exchanged. Expect 401 — and the session it belonged to is now revoked, so {{token}} and {{refreshToken}} stop working too.\n\nRun POST /auth/refresh at least once first, or {{previousRefreshToken}} is empty. Run this LAST: it signs you out. Sign in again from folder 1 to continue."
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 401,\n  \"message\": \"Session expired. Sign in again.\",\n  \"error\": \"Unauthorized\"\n}"
+            }
+          ]
         }
       ]
     },
