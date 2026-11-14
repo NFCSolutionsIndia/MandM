@@ -4,16 +4,18 @@ import {
   type NestModule,
 } from '@nestjs/common';
 
+import { AppVersionModule } from '../app-version/app-version.module.js';
 import { MailModule } from '../mail/mail.module.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminActorMiddleware } from './admin.middleware.js';
+import { AppVersionsAdminController } from './app-versions.controller.js';
 import { DashboardController } from './dashboard.controller.js';
 import { DashboardService } from './dashboard.service.js';
 
 @Module({
-  imports: [MailModule],
-  controllers: [AdminAuthController, DashboardController],
+  imports: [MailModule, AppVersionModule],
+  controllers: [AdminAuthController, DashboardController, AppVersionsAdminController],
   providers: [AdminAuthService, DashboardService],
 })
 export class AdminModule implements NestModule {

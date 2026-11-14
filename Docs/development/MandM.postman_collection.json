@@ -80,6 +80,10 @@
     {
       "key": "extraRecipientId",
       "value": ""
+    },
+    {
+      "key": "appVersion",
+      "value": "1.2.0"
     }
   ],
   "item": [
@@ -542,6 +546,444 @@
                   "pm.test('401', () => pm.response.to.have.status(401));"
                 ]
               }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1b · Mobile API — app version",
+      "description": "BE-05. The force-update check, separately for iOS and Android. Public: an app too old to sign in still has to be told to update.\n\nSet {{appVersion}} to the build you want to pretend to be. The values themselves are set in the Admin panel folder (PUT /admin/v1/app-versions/:platform).",
+      "item": [
+        {
+          "name": "GET /app-version/ios?current=",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app-version/ios?current={{appVersion}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app-version",
+                "ios"
+              ],
+              "query": [
+                {
+                  "key": "current",
+                  "value": "{{appVersion}}"
+                }
+              ]
+            },
+            "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has both flags', () => { pm.expect(b.updateAvailable).to.be.a('boolean'); pm.expect(b.forceUpdate).to.be.a('boolean'); });",
+                  "pm.test('cacheable for 5 minutes', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('public, max-age=300'));",
+                  "console.log(b.platform, 'latest', b.latestVersion, 'min', b.minSupportedVersion, '| update:', b.updateAvailable, '| force:', b.forceUpdate);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — below the minimum: force update",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/ios?current={{appVersion}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "ios"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "{{appVersion}}"
+                    }
+                  ]
+                },
+                "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=300"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"ios\",\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"updateAvailable\": true,\n  \"forceUpdate\": true,\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            },
+            {
+              "name": "200 — between minimum and latest: update available",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/ios?current={{appVersion}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "ios"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "{{appVersion}}"
+                    }
+                  ]
+                },
+                "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=300"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"ios\",\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"updateAvailable\": true,\n  \"forceUpdate\": false,\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            },
+            {
+              "name": "200 — on the latest version",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/ios?current={{appVersion}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "ios"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "{{appVersion}}"
+                    }
+                  ]
+                },
+                "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=300"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"ios\",\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"updateAvailable\": false,\n  \"forceUpdate\": false,\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            },
+            {
+              "name": "400 — current is not x.y.z",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/ios?current={{appVersion}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "ios"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "{{appVersion}}"
+                    }
+                  ]
+                },
+                "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"current\",\n      \"message\": \"must be an x.y.z version, such as 1.4.0\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /app-version/android?current=",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app-version/android?current={{appVersion}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app-version",
+                "android"
+              ],
+              "query": [
+                {
+                  "key": "current",
+                  "value": "{{appVersion}}"
+                }
+              ]
+            },
+            "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has both flags', () => { pm.expect(b.updateAvailable).to.be.a('boolean'); pm.expect(b.forceUpdate).to.be.a('boolean'); });",
+                  "pm.test('cacheable for 5 minutes', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('public, max-age=300'));",
+                  "console.log(b.platform, 'latest', b.latestVersion, 'min', b.minSupportedVersion, '| update:', b.updateAvailable, '| force:', b.forceUpdate);"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — update available",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/android?current={{appVersion}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "android"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "{{appVersion}}"
+                    }
+                  ]
+                },
+                "description": "Public — no Authorization header. The app calls this on launch with its own version.\n\n• updateAvailable: current < latestVersion → show the \"update available\" banner.\n• forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.\n• No ?current → the same data with both flags false.\n\nVersions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.\n\nCache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.\n\nUntil an admin sets a value, both versions are 0.0.0 and neither flag ever fires."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=300"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"android\",\n  \"latestVersion\": \"1.10.0\",\n  \"minSupportedVersion\": \"1.9.0\",\n  \"updateAvailable\": true,\n  \"forceUpdate\": false,\n  \"storeUrl\": \"https://play.google.com/store/apps/details?id=com.example.app\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /app-version/ios — no current (both flags false)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app-version/ios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app-version",
+                "ios"
+              ]
+            },
+            "description": "Without ?current: the data, with updateAvailable and forceUpdate both false."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('no verdict without a version', () => { const b = pm.response.json(); pm.expect(b.updateAvailable).to.eql(false); pm.expect(b.forceUpdate).to.eql(false); });"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — data, no verdict",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/ios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "ios"
+                  ]
+                },
+                "description": "Without ?current: the data, with updateAvailable and forceUpdate both false."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "public, max-age=300"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"ios\",\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"updateAvailable\": false,\n  \"forceUpdate\": false,\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /app-version/windows (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/app-version/windows?current=1.0.0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "app-version",
+                "windows"
+              ],
+              "query": [
+                {
+                  "key": "current",
+                  "value": "1.0.0"
+                }
+              ]
+            },
+            "description": "Only ios and android exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "404 — unknown platform",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/app-version/windows?current=1.0.0",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "app-version",
+                    "windows"
+                  ],
+                  "query": [
+                    {
+                      "key": "current",
+                      "value": "1.0.0"
+                    }
+                  ]
+                },
+                "description": "Only ios and android exist."
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 404,\n  \"message\": \"Unknown platform.\",\n  \"error\": \"Not Found\"\n}"
             }
           ]
         }
@@ -1852,6 +2294,271 @@
                   "pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
                 ]
               }
+            }
+          ]
+        },
+        {
+          "name": "GET /admin/v1/app-versions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "app-versions"
+              ]
+            },
+            "description": "Both platforms, for the console App versions page (ADM-01). updatedBy is null until somebody first edits a platform."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('both platforms', () => pm.expect(pm.response.json()).to.have.length(2));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — both platforms",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "admin",
+                    "v1",
+                    "app-versions"
+                  ]
+                },
+                "description": "Both platforms, for the console App versions page (ADM-01). updatedBy is null until somebody first edits a platform."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "[\n  {\n    \"platform\": \"ios\",\n    \"latestVersion\": \"1.4.0\",\n    \"minSupportedVersion\": \"1.3.0\",\n    \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n    \"releaseNotes\": \"Faster uploads.\",\n    \"updatedBy\": {\n      \"id\": \"019a7b3c-5d2e-7f10-8a4b-1c2d3e4f5a6b\",\n      \"email\": \"admin@example.com\"\n    },\n    \"updatedAt\": \"2026-11-14T10:00:00.000Z\"\n  },\n  {\n    \"platform\": \"android\",\n    \"latestVersion\": \"0.0.0\",\n    \"minSupportedVersion\": \"0.0.0\",\n    \"storeUrl\": null,\n    \"releaseNotes\": null,\n    \"updatedBy\": null,\n    \"updatedAt\": \"2026-11-14T09:00:00.000Z\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "PUT /admin/v1/app-versions/ios",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions/ios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "app-versions",
+                "ios"
+              ]
+            },
+            "description": "Replaces one platform's row — PUT, so storeUrl and releaseNotes left out are cleared. Every change writes an audit_logs row (action app_version.updated) with the admin and the old and new values.\n\n422 when a version is not x.y.z (no leading zeros), minSupportedVersion is newer than latestVersion, or storeUrl is not https://. 404 for a platform other than ios or android.\n\nSwap ios for android in the URL to set Android."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — saved and audit-logged",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions/ios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "admin",
+                    "v1",
+                    "app-versions",
+                    "ios"
+                  ]
+                },
+                "description": "Replaces one platform's row — PUT, so storeUrl and releaseNotes left out are cleared. Every change writes an audit_logs row (action app_version.updated) with the admin and the old and new values.\n\n422 when a version is not x.y.z (no leading zeros), minSupportedVersion is newer than latestVersion, or storeUrl is not https://. 404 for a platform other than ios or android.\n\nSwap ios for android in the URL to set Android."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"platform\": \"ios\",\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"1.3.0\",\n  \"storeUrl\": \"https://apps.apple.com/app/id0000000000\",\n  \"releaseNotes\": \"Faster uploads.\",\n  \"updatedBy\": {\n    \"id\": \"019a7b3c-5d2e-7f10-8a4b-1c2d3e4f5a6b\",\n    \"email\": \"admin@example.com\"\n  },\n  \"updatedAt\": \"2026-11-14T10:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /admin/v1/app-versions/ios — minimum above latest (expect 422)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"2.0.0\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions/ios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "v1",
+                "app-versions",
+                "ios"
+              ]
+            },
+            "description": "A minimum newer than the latest is refused, and nothing changes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "422 — refused",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latestVersion\": \"1.4.0\",\n  \"minSupportedVersion\": \"2.0.0\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/admin/v1/app-versions/ios",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "admin",
+                    "v1",
+                    "app-versions",
+                    "ios"
+                  ]
+                },
+                "description": "A minimum newer than the latest is refused, and nothing changes."
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"minSupportedVersion\",\n      \"message\": \"must not be newer than latestVersion\"\n    }\n  ]\n}"
             }
           ]
         },

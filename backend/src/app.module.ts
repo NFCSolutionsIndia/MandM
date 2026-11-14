@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
 import { AdminModule } from './admin/admin.module.js';
+import { AppVersionModule } from './app-version/app-version.module.js';
 import { ArchiveModule } from './archive/archive.module.js';
 import { CapsulesModule } from './capsules/capsules.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
@@ -47,6 +48,7 @@ import { VaultsModule } from './vaults/vaults.module.js';
     VaultsModule,
     ArchiveModule,
     CapsulesModule,
+    AppVersionModule,
     HealthModule,
   ],
   providers: [

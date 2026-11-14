@@ -141,6 +141,13 @@
       "when": 1794567454649,
       "tag": "0019_access_and_refresh_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794669448165,
+      "tag": "0020_app_versions",
+      "breakpoints": true
     }
   ]
 }

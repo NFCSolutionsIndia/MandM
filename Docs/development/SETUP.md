@@ -1787,6 +1787,8 @@ asserting the version nibble on every id those functions create.
 | `POST /api/v1/auth/sign-out` | revoked on the **next** request, which is why sessions are rows |
 | `POST /api/v1/auth/sign-out-others` | the "I lost my phone" button |
 | `GET  /api/v1/vaults` · `POST /api/v1/vaults` | the first product endpoints |
+| `GET  /api/v1/app-version/:platform?current=x.y.z` | public, `ios` or `android`. `updateAvailable` (current < latest) and `forceUpdate` (current < minimum), compared numerically. Cached 5 minutes |
+| `GET  /api/v1/admin/v1/app-versions` · `PUT …/:platform` | console only. A PUT is audit-logged with old and new values; 422 for a non-x.y.z version or a minimum above the latest |
 | `GET  /health` · `/health/ready` | public, and outside the version prefix |
 
 In development the sign-in code is written to the log. `MailService` **throws

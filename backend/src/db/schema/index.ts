@@ -42,3 +42,4 @@ export * from './governance.js'; // 16 admin_users · roles · permissions
 export * from './admin.js'; // 20 admin_sessions — the console's own realm
 //                                audit_logs · break_glass_access · reports
 //                                moderation_flags · blocks · feature_flags
+export * from './releases.js'; // app_versions — what the mobile apps must be

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Injectable,
   type PipeTransform,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import type { ZodType } from 'zod';
 
@@ -17,7 +18,14 @@ import type { ZodType } from 'zod';
  */
 @Injectable()
 export class ZodValidationPipe implements PipeTransform {
-  constructor(private readonly schema: ZodType) {}
+  /**
+   * `status` is 400 unless a contract says otherwise. Some do: the admin
+   * endpoints answer a well-formed body with invalid values as 422.
+   */
+  constructor(
+    private readonly schema: ZodType,
+    private readonly status: 400 | 422 = 400,
+  ) {}
 
   transform(value: unknown, _metadata: ArgumentMetadata): unknown {
     const parsed = this.schema.safeParse(value);
@@ -26,7 +34,9 @@ export class ZodValidationPipe implements PipeTransform {
       // Field and message only. The VALUE is never echoed: these bodies carry
       // email addresses and sign-in codes, and a validation error is a log
       // line as surely as it is a response.
-      throw new BadRequestException({
+      const Exception =
+        this.status === 422 ? UnprocessableEntityException : BadRequestException;
+      throw new Exception({
         message: 'Validation failed',
         errors: parsed.error.issues.map((issue) => ({
           field: issue.path.join('.') || '(root)',
