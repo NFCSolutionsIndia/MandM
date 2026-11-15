@@ -84,6 +84,10 @@
     {
       "key": "appVersion",
       "value": "1.2.0"
+    },
+    {
+      "key": "newUsername",
+      "value": "aarav.k"
     }
   ],
   "item": [
@@ -984,6 +988,710 @@
               ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 404,\n  \"message\": \"Unknown platform.\",\n  \"error\": \"Not Found\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1c · Mobile API — username",
+      "description": "BE-03. Every account gets a username at sign-up (from the email, else the name, else \"user\"; digits added when taken). Rules: 3–30 of a-z 0-9 . _, not starting or ending with \".\", no \"..\", not reserved. Set {{newUsername}} to the handle you want to try.",
+      "item": [
+        {
+          "name": "GET /users/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me"
+              ]
+            },
+            "description": "The signed-in user, with username. usernameChangeableAt is null when the user may choose a new handle now, else when they next may (D-5: once every USERNAME_CHANGE_DAYS, default 14)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('has username', () => pm.expect(pm.response.json().username).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me"
+                  ]
+                },
+                "description": "The signed-in user, with username. usernameChangeableAt is null when the user may choose a new handle now, else when they next may (D-5: once every USERNAME_CHANGE_DAYS, default 14)."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"id\": \"019a7b3c-0000-7000-8000-000000000001\",\n  \"email\": \"aarav@example.com\",\n  \"username\": \"aarav\",\n  \"name\": \"aarav\",\n  \"plan\": \"free\",\n  \"createdAt\": \"2026-11-15T10:00:00.000Z\",\n  \"usernameChangedAt\": null,\n  \"usernameChangeableAt\": null\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /users/username-available?u=",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "username-available"
+              ],
+              "query": [
+                {
+                  "key": "u",
+                  "value": "{{newUsername}}"
+                }
+              ]
+            },
+            "description": "Case-insensitive. A malformed name is a 200 with reason \"invalid\", not an error — the edit screen calls this as the user types. reason is one of invalid | reserved | taken; your own current handle counts as available. Up to three free suggestions when unavailable."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — available",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "username-available"
+                  ],
+                  "query": [
+                    {
+                      "key": "u",
+                      "value": "{{newUsername}}"
+                    }
+                  ]
+                },
+                "description": "Case-insensitive. A malformed name is a 200 with reason \"invalid\", not an error — the edit screen calls this as the user types. reason is one of invalid | reserved | taken; your own current handle counts as available. Up to three free suggestions when unavailable."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"username\": \"aarav.k\",\n  \"available\": true,\n  \"suggestions\": []\n}"
+            },
+            {
+              "name": "200 — taken",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "username-available"
+                  ],
+                  "query": [
+                    {
+                      "key": "u",
+                      "value": "{{newUsername}}"
+                    }
+                  ]
+                },
+                "description": "Case-insensitive. A malformed name is a 200 with reason \"invalid\", not an error — the edit screen calls this as the user types. reason is one of invalid | reserved | taken; your own current handle counts as available. Up to three free suggestions when unavailable."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"username\": \"aarav.k\",\n  \"available\": false,\n  \"reason\": \"taken\",\n  \"suggestions\": [\n    \"aarav.k1\",\n    \"aarav.k_\",\n    \"aaravk\"\n  ]\n}"
+            },
+            {
+              "name": "200 — invalid",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "username-available"
+                  ],
+                  "query": [
+                    {
+                      "key": "u",
+                      "value": "{{newUsername}}"
+                    }
+                  ]
+                },
+                "description": "Case-insensitive. A malformed name is a 200 with reason \"invalid\", not an error — the edit screen calls this as the user types. reason is one of invalid | reserved | taken; your own current handle counts as available. Up to three free suggestions when unavailable."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"username\": \"a..b\",\n  \"available\": false,\n  \"reason\": \"invalid\",\n  \"message\": \"Username cannot contain ...\",\n  \"suggestions\": [\n    \"a.b1\",\n    \"a.b_\",\n    \"ab12\"\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /users/username-available?u=ADMIN (reserved)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/username-available?u=ADMIN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "username-available"
+              ],
+              "query": [
+                {
+                  "key": "u",
+                  "value": "ADMIN"
+                }
+              ]
+            },
+            "description": "Reserved names are refused in any case, and with . or _ added (ad.min, support_)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('not available', () => pm.expect(pm.response.json().available).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — reserved",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/username-available?u=ADMIN",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "username-available"
+                  ],
+                  "query": [
+                    {
+                      "key": "u",
+                      "value": "ADMIN"
+                    }
+                  ]
+                },
+                "description": "Reserved names are refused in any case, and with . or _ added (ad.min, support_)."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"username\": \"admin\",\n  \"available\": false,\n  \"reason\": \"reserved\",\n  \"suggestions\": [\n    \"admin1\",\n    \"admin_\",\n    \"admin_42\"\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/me/username",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{newUsername}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/username",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "username"
+              ]
+            },
+            "description": "200 | 409 taken (with suggestions) | 422 invalid or reserved | 429 changed too recently (retryAfter says when). The same handle again is a 200 with changed:false and does not start the cooldown. Every change is audit-logged (user.username_changed)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "200 — changed",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{newUsername}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me/username",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me",
+                    "username"
+                  ]
+                },
+                "description": "200 | 409 taken (with suggestions) | 422 invalid or reserved | 429 changed too recently (retryAfter says when). The same handle again is a 200 with changed:false and does not start the cooldown. Every change is audit-logged (user.username_changed)."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"username\": \"aarav.k\",\n  \"changed\": true,\n  \"usernameChangedAt\": \"2026-11-15T10:00:00.000Z\",\n  \"usernameChangeableAt\": \"2026-11-29T10:00:00.000Z\"\n}"
+            },
+            {
+              "name": "409 — taken",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{newUsername}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me/username",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me",
+                    "username"
+                  ]
+                },
+                "description": "200 | 409 taken (with suggestions) | 422 invalid or reserved | 429 changed too recently (retryAfter says when). The same handle again is a 200 with changed:false and does not start the cooldown. Every change is audit-logged (user.username_changed)."
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 409,\n  \"message\": \"That username is taken.\",\n  \"suggestions\": [\n    \"aarav.k1\",\n    \"aarav.k_\",\n    \"aaravk\"\n  ]\n}"
+            },
+            {
+              "name": "422 — invalid",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{newUsername}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me/username",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me",
+                    "username"
+                  ]
+                },
+                "description": "200 | 409 taken (with suggestions) | 422 invalid or reserved | 429 changed too recently (retryAfter says when). The same handle again is a 200 with changed:false and does not start the cooldown. Every change is audit-logged (user.username_changed)."
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"username\",\n      \"message\": \"cannot contain ..\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/me/username — again (expect 429)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{newUsername}}2\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/username",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "username"
+              ]
+            },
+            "description": "Straight after a change: 429 until the cooldown ends."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('429', () => pm.response.to.have.status(429));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "429 — too soon",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"{{newUsername}}2\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me/username",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me",
+                    "username"
+                  ]
+                },
+                "description": "Straight after a change: 429 until the cooldown ends."
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"statusCode\": 429,\n  \"message\": \"You can change your username once every 14 days.\",\n  \"retryAfter\": \"2026-11-29T10:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "PATCH /users/me/username — reserved (expect 422)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"support\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me/username",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "me",
+                "username"
+              ]
+            },
+            "description": "Reserved: 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "422 — reserved",
+              "originalRequest": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"support\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/users/me/username",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "users",
+                    "me",
+                    "username"
+                  ]
+                },
+                "description": "Reserved: 422."
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"field\": \"username\",\n      \"message\": \"is reserved\"\n    }\n  ]\n}"
             }
           ]
         }

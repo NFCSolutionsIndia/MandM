@@ -62,17 +62,25 @@ export const users = pgTable(
     name: varchar('name', { length: 200 }).notNull(),
 
     /**
-     * The public handle — `aarav.k`. Lower-case, 3–30 characters of `a-z`,
-     * `0-9`, `.` and `_`, never starting or ending with a separator.
+     * The public handle — `aarav.k` (BE-03). 3–30 characters of `a-z`, `0-9`,
+     * `.` and `_`; never starting or ending with `.`, never containing `..`.
      *
-     * The check constraint forces lower case, so the unique index is
-     * case-insensitive in effect without needing `citext`.
+     * `citext`, so `Aarav.K` and `aarav.k` collide in the unique index. The
+     * check constraint also keeps what is STORED lower-case, so a handle is
+     * always displayed the way it is compared.
      *
-     * Never empty: a `BEFORE INSERT` trigger (migration 0018) derives one
-     * from the email's local part when the insert does not name one, so
-     * every path that creates a user — sign-in, seeds, tests — gets one.
+     * Never empty: a `BEFORE INSERT` trigger (migrations 0018, 0021) derives
+     * one from the email's local part — or the name, for an account with no
+     * email — so every path that creates a user gets one.
+     *
+     * Reserved names (`admin`, `support`, …) live in ONE list, the SQL
+     * function `app_username_reserved`, which both the generator and
+     * `app_change_username` consult.
      */
-    username: varchar('username', { length: 30 }).notNull(),
+    username: citext('username').notNull(),
+
+    /** The last time the user CHOSE a handle. Null until then (D-5: at most once per USERNAME_CHANGE_DAYS). */
+    usernameChangedAt: utcTimestamp('username_changed_at'),
 
     /**
      * The foreign key was deferred until `media_assets` existed, and added in
@@ -131,7 +139,8 @@ export const users = pgTable(
     uniqueIndex('ux_users_username').on(t.username),
     check(
       'ck_users_username',
-      sql`${t.username} ~ '^[a-z0-9][a-z0-9._]{1,28}[a-z0-9]$'`,
+      // `::text`, because `~` on citext ignores case and would let `AARAV` in.
+      sql`${t.username}::text ~ '^[a-z0-9_][a-z0-9._]{1,28}[a-z0-9_]$' AND position('..' in ${t.username}::text) = 0`,
     ),
     // Partial: the purge job only ever asks for rows awaiting deletion, which
     // is a handful against a table of millions.

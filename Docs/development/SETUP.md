@@ -1786,6 +1786,9 @@ asserting the version nibble on every id those functions create.
 | `GET  /api/v1/auth/me` | `WHERE id = app_current_user()` — no input can make it return somebody else |
 | `POST /api/v1/auth/sign-out` | revoked on the **next** request, which is why sessions are rows |
 | `POST /api/v1/auth/sign-out-others` | the "I lost my phone" button |
+| `GET  /api/v1/users/me` | the account, with `username` and `usernameChangeableAt` (null = may change now) |
+| `GET  /api/v1/users/username-available?u=` | case-insensitive; `reason` = `invalid` · `reserved` · `taken`, plus up to three free `suggestions`. A malformed name is a 200, not an error |
+| `PATCH /api/v1/users/me/username` | D-5: once every `USERNAME_CHANGE_DAYS`. 409 taken · 422 invalid or reserved · 429 too soon (`retryAfter`). Audit-logged |
 | `GET  /api/v1/vaults` · `POST /api/v1/vaults` | the first product endpoints |
 | `GET  /api/v1/app-version/:platform?current=x.y.z` | public, `ios` or `android`. `updateAvailable` (current < latest) and `forceUpdate` (current < minimum), compared numerically. Cached 5 minutes |
 | `GET  /api/v1/admin/v1/app-versions` · `PUT …/:platform` | console only. A PUT is audit-logged with old and new values; 422 for a non-x.y.z version or a minimum above the latest |
@@ -3945,6 +3948,7 @@ TEST_MIGRATION_DATABASE_URL=postgres://postgres:CHANGEME@127.0.0.1:5432/mm_test
 | `ACCESS_TOKEN_HOURS` | no | 24. How long an access token works. Ceiling 168 |
 | `REFRESH_TOKEN_DAYS` | no | 30. Rolling — every refresh issues a new refresh token with a fresh window |
 | `SESSION_IDLE_DAYS` | no | 7. No request and no refresh for this long ends the session, for both tokens |
+| `USERNAME_CHANGE_DAYS` | no | 14. How often a user may choose a new username (D-5). The generated one does not count, so the first change is always allowed |
 
 > **The bucket stays private.** Media is served by short-lived signed URLs,
 > never by a public bucket or a public `r2.dev` URL. A public URL cannot be
