@@ -192,8 +192,9 @@ late:
 | **No haptics on iOS** (Vibration API is Chromium-only) | No interaction depends on haptic feedback |
 | **No SMS auto-read on iOS** (WebOTP is Chromium-only) | OTP entry is designed for manual typing on every platform |
 
-**Upside of the apps choice:** web checkout instead of store billing — no 15–30% platform
-commission, full pricing control, and immediate plan changes.
+**Billing in the apps:** subscriptions and Magic AI credit plans are bought in the app through the
+App Store and Google Play. Apple and Google take 15% under their small-business programmes, and
+every price is set so it stays at least 25% profitable after that fee and tax.
 
 ### 5.3 Offline behaviour
 

@@ -111,7 +111,7 @@ ${'```'}
 These are not preferences. Violating any of them breaks the product's core promise.
 
 1. **A sealed capsule is delivered.** The scheduler is database-owned (§18.4). No third-party scheduler is the source of truth for a date decades away. A missed unlock pages a human and is treated as Sev-0.
-2. **A sealed capsule is never cancelled for non-payment** (§17.2 item 4). The rest of a lapsed account follows the lapse policy: 30-day read-only grace, then Free 10 GB, sealed capsules kept first, anything above 10 GB deleted (§17.2 item 8, Appendix C-18 revised 2026-11-03).
+2. **A sealed capsule is never cancelled for non-payment** (§17.2 item 4). The rest of a lapsed account follows the lapse policy: 30-day read-only grace, then Free 10 GB, sealed capsules kept first, anything above 10 GB deleted (§17.2 item 8, Appendix C-18).
 3. **\`/c/[token]\` is server-rendered and works with JavaScript disabled** (§29.24, §37). A 2046 recipient must not be blocked by a 2026 framework assumption.
 4. **The local copy is written before the upload starts** (§12.1 step 3). A memory is never at risk while an upload is pending.
 5. **No object in the media bucket is ever publicly readable.** Signed URLs, 5-minute TTL, minted after authorization (§12.5).

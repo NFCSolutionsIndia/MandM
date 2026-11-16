@@ -190,8 +190,8 @@ profit over 20 years per full user: Premium India $165–294, US $382–924, EU 
 India $485–811, US $966–1,474, EU $540–963. The full workings are in
 `MandM-Storage-and-AI-Plans.pptx` and blueprint §17.2 item 7.
 
-**Launch recommendation: ship Release 1 with Free and Premium only**, plus Stripe and Razorpay
-checkout and the billing portal. Add Family and any lifetime plan once retention data exists.
+**Launch recommendation: ship Release 1 with Free and Premium only**, billed in the app through
+the App Store and Google Play (15% fee, already inside every number above). Add Family and any lifetime plan once retention data exists.
 
 ### 4.2 Why storage, not upload count
 
@@ -264,8 +264,8 @@ media sits in **cold storage** until it is due.
 3. **Sealed capsules are kept first, then the memories the user chooses.**
 4. **Anything above 10 GB is deleted.**
 
-This replaces the earlier "memories are never deleted for non-payment" position, under which a
-single month of Premium filled to 100 GB lost about $429 over 20 years. **Both the capsule
+A one-month payer who fills the plan and leaves therefore costs only the grace month, then
+exactly what a free account costs. **Both the capsule
 promise and the lapse policy must be written into the Terms and shown on the pricing page,
 not left as implementation behaviour.**
 

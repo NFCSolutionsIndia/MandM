@@ -75,7 +75,7 @@ the documents above, and each is enforced in code or in CI rather than by good i
 | Hosting | AWS — ECS Fargate (web + two worker services), ALB, CloudFront + WAF, CDK |
 | Apps | iOS: Swift 6 · SwiftUI · GRDB · background URLSession — Android: Kotlin 2 · Compose · Room · WorkManager |
 | UI | Tailwind v4 · Radix primitives · Motion |
-| Payments | Stripe + Razorpay (India-first) |
+| Payments | App Store and Google Play in-app billing (15%); Stripe + Razorpay only for any web purchase |
 | Email | Resend primary, Amazon SES as a standing fallback |
 | Testing | Vitest · Playwright · permission-matrix tests against real PostgreSQL |
 
