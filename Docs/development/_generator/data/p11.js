@@ -174,7 +174,7 @@ What *is* decided, and recorded below, is the module set, the objectives, and th
       objective: 'Add the growth and retention mechanics blueprint §7.2 lists, with the non-manipulative constraint made binding.',
       business: ['Households pay more readily than individuals (§17.2 item 3), and the Family tier is the natural upgrade path.'],
       functional: [
-        'Family plan tier (six seats, pooled storage).',
+        'Family plan tier (five seats, pooled storage: 200 GB India · 300 GB US/EU).',
         'Referral programme: gift a month of Premium.',
         'Streaks, thoughtfulness score, and badges.',
         'Annual reassurance report.',

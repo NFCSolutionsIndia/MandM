@@ -314,7 +314,7 @@ No migration.
 
 | Summary | Assign To | Priority | Estimate | Tags |
 |---|---|---|---|---|
-| `[BE-03] Unique auto-generated username for every user` | Akshara Perala | High | 10:00 | `backend,users,migration` |
+| `[BE-03] Unique auto-generated username for every user` | Akshara Peraka | High | 10:00 | `backend,users,migration` |
 
 **Description**
 
@@ -481,7 +481,7 @@ Publish the Postman examples on day 1. saib (MOB-04, MOB-08) builds against them
 
 | Summary | Assign To | Priority | Estimate | Tags |
 |---|---|---|---|---|
-| `[BE-05] App version API, separate for iOS and Android` | Omsai | High | 08:00 | `backend,app-version,admin,migration` |
+| `[BE-05] App version API, separate for iOS and Android` | Akshara | High | 08:00 | `backend,app-version,admin,migration` |
 
 **Description**
 
@@ -1177,3 +1177,4 @@ Milestone #2611.02. The ticket tool is the live status; this table mirrors it.
 |---|---|
 | 2026-11-13 | Document created. The 7 requirements were checked against the code (§2). Tasks BE-01…08, MOB-01…06 and ADM-01…03 were written, decisions D-1…D-9 were opened, and the AI agent plan was added (§6). |
 | 2026-11-13 | Every task rewritten as a ticket matching the ticket form's fields (Summary, Description, Assign To, Priority, Steps To Reproduce = how to test, Additional Information, Tags, Estimate). Milestone #2611.02 added. Estimates added (max 23:45 per ticket). To fit, BE-02 was split (SMS sending moved to new **BE-09**), MOB-02 was split (token handling moved to new **MOB-07**), and MOB-04 was split (capsule picker moved to new **MOB-08**). BE-03 unblocked for generation (D-5 only affects editing). |
+| 2026-11-15 | Pricing finalized for client approval (`Docs/client/MandM-Storage-and-AI-Plans.pptx`, blueprint §17.2 items 7–10). Premium 100 GB India / 150 GB US-EU (₹399 · ₹3,999/yr), Family 5 seats 200/300 GB pooled, +100 GB add-on, lapse policy (30-day read-only grace → Free 10 GB → sealed capsules kept first → rest deleted), Magic Lite / Plus AI credits. No ticket in milestone #2611.02 changes. Older phase docs (TASK-085, TASK-087, TASK-101, MOD-08-03, MOD-11-04) were updated to match. The lapse clean-up job and AI credit billing still need tickets when billing work is scheduled. |

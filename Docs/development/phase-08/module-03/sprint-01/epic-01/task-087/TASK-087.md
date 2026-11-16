@@ -123,7 +123,7 @@ _No API surface in this task._
 
 1. **Horizon** (primary) — "This one needs to wait until 2044. Free plans schedule up to a year ahead."
 2. **Pending cap** — "You have 3 memories already waiting."
-3. **Storage** — "You're at 10 GB. Premium gives you 250 GB." Shown at 90%, **never a hard block mid-upload**.
+3. **Storage** — "You're at 10 GB. Premium gives you 100 GB." Shown at 90%, **never a hard block mid-upload**.
 4. **Feature** — age milestones, WhatsApp/SMS, broadcasts, AI, heirs.
 
 **Storage meter** — percentage plus a human translation: "6.2 of 10 GB — about 1,900 photos".
@@ -146,7 +146,7 @@ _No API surface in this task._
 
 - A user at 89% starting a 2 GB upload — the quota check at session creation catches it before bytes move, per PHASE-04.
 - A user who upgrades mid-upload — the reserved session is honoured; the new quota applies to the next one.
-- A downgrade leaving the user over quota — **read-only grace, never deletion** (§32.7, Appendix C-18). Verify this is implemented, not just intended.
+- A lapse or downgrade leaving the user over quota — **30-day read-only grace, then Free 10 GB: sealed capsules kept first, then the memories the user chooses, the rest deleted** (§17.2 item 8, Appendix C-18 revised). Verify this is implemented, not just intended.
 - Reconciliation finding large drift — report and alert; do not silently correct, because the cause matters.
 - Reconciliation on a huge vault — chunk it.
 - A paywall shown to a user who is already Premium (a stale client) — the server gate is authoritative; the sheet must not appear.
@@ -176,7 +176,7 @@ _No API surface in this task._
 ### Integration Tests
 
 - Quota blocks before bytes move.
-- **Over-quota after downgrade is read-only, not deleting.**
+- **Over-quota after a lapse is read-only for 30 days, then trimmed to 10 GB keeping sealed capsules first.**
 - Cancelling a pending capsule frees a slot immediately.
 - Reconciliation reports drift; large drift alerts rather than auto-correcting.
 - Horizon trigger emits its own analytics event.
@@ -194,7 +194,7 @@ _No API surface in this task._
 - [ ] Four paywalls with §29.26 copy verbatim, each instrumented separately.
 - [ ] **No capsule or memory-count paywall, asserted by test.**
 - [ ] Storage meter with human translation and 90% warning.
-- [ ] Over-quota downgrade is read-only, never deleting.
+- [ ] Over-quota lapse: 30 days read-only, then trimmed to 10 GB with sealed capsules kept first.
 - [ ] Reconciliation job reports drift and alerts on large discrepancies.
 
 ---

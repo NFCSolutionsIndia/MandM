@@ -550,7 +550,7 @@ purge handler (idempotent, resumable)
       purpose: 'Take money, enforce limits, and never break a promise doing it.',
       priority: 'critical',
       objective: 'Implement the §17.2 pricing model exactly, with entitlements that cannot retroactively invalidate a sealed capsule.',
-      business: ['Media costs money from the first user. Blueprint §17.2 also decided that memories are never deleted and capsules never cancelled for non-payment — those constraints shape the implementation.'],
+      business: ['Media costs money from the first user. Blueprint §17.2 also decided that sealed capsules are never cancelled for non-payment, and that a lapsed account follows the lapse policy (30-day read-only grace, then Free 10 GB, sealed capsules kept first, anything above 10 GB deleted; item 8, Appendix C-18) — those constraints shape the implementation.'],
       functional: ['Subscription entity with snapshot entitlements', 'Stripe and Razorpay checkout and portal', 'Webhooks with idempotency', 'Quota enforcement at upload', 'Contextual paywalls', 'Accounting reconciliation'],
       ui: ['Plans and paywall per §29.26'],
       backend: ['Checkout, webhooks, entitlement resolution, quota checks'],
@@ -631,7 +631,7 @@ purge handler (idempotent, resumable)
 
 **Free tier (§17.2):** 10 GB storage · **unlimited memories** · 3 pending capsules · 365-day horizon · 5-minute video · in-app + email channels.
 
-**Premium:** 250 GB · unlimited pending · unlimited horizon + age milestones · 30-minute video · all channels.
+**Premium:** 100 GB in India · 150 GB in US/EU (smaller caps in other markets, §17.2) · unlimited pending · unlimited horizon + age milestones · 30-minute video · all channels. Storage is a per-country entitlement, and +100 GB add-ons stack on it.
 
 **There is no \`memories_per_month\` column.** Appendix C-6 decided against an upload counter: it is a recurring monthly wall that teaches users not to upload, and it saves nothing (10 GB costs roughly \\$0.15/month at full use). A test asserts the column\'s absence.
 
@@ -805,7 +805,7 @@ purge handler (idempotent, resumable)
 
 1. **Horizon** (primary) — "This one needs to wait until 2044. Free plans schedule up to a year ahead."
 2. **Pending cap** — "You have 3 memories already waiting."
-3. **Storage** — "You're at 10 GB. Premium gives you 250 GB." Shown at 90%, **never a hard block mid-upload**.
+3. **Storage** — "You're at 10 GB. Premium gives you 100 GB." Shown at 90%, **never a hard block mid-upload**.
 4. **Feature** — age milestones, WhatsApp/SMS, broadcasts, AI, heirs.
 
 **Storage meter** — percentage plus a human translation: "6.2 of 10 GB — about 1,900 photos".
@@ -821,7 +821,7 @@ purge handler (idempotent, resumable)
                   edge: [
                     'A user at 89% starting a 2 GB upload — the quota check at session creation catches it before bytes move, per PHASE-04.',
                     'A user who upgrades mid-upload — the reserved session is honoured; the new quota applies to the next one.',
-                    'A downgrade leaving the user over quota — **read-only grace, never deletion** (§32.7, Appendix C-18). Verify this is implemented, not just intended.',
+                    'A lapse or downgrade leaving the user over quota — **30-day read-only grace, then Free 10 GB: sealed capsules kept first, then the memories the user chooses, the rest deleted** (§17.2 item 8, Appendix C-18 revised). Verify this is implemented, not just intended.',
                     'Reconciliation finding large drift — report and alert; do not silently correct, because the cause matters.',
                     'Reconciliation on a huge vault — chunk it.',
                     'A paywall shown to a user who is already Premium (a stale client) — the server gate is authoritative; the sheet must not appear.',
@@ -834,7 +834,7 @@ purge handler (idempotent, resumable)
                     component: ['Each of the four paywalls renders its §29.26 copy.', '**No capsule paywall and no memory-count paywall exist**, asserted.'],
                     integration: [
                       'Quota blocks before bytes move.',
-                      '**Over-quota after downgrade is read-only, not deleting.**',
+                      '**Over-quota after a lapse is read-only for 30 days, then trimmed to 10 GB keeping sealed capsules first.**',
                       'Cancelling a pending capsule frees a slot immediately.',
                       'Reconciliation reports drift; large drift alerts rather than auto-correcting.',
                       'Horizon trigger emits its own analytics event.',
@@ -845,7 +845,7 @@ purge handler (idempotent, resumable)
                     'Four paywalls with §29.26 copy verbatim, each instrumented separately.',
                     '**No capsule or memory-count paywall, asserted by test.**',
                     'Storage meter with human translation and 90% warning.',
-                    'Over-quota downgrade is read-only, never deleting.',
+                    'Over-quota lapse: 30 days read-only, then trimmed to 10 GB with sealed capsules kept first.',
                     'Reconciliation job reports drift and alerts on large discrepancies.',
                   ],
                   notes: ['The horizon paywall is the primary conversion event in the whole model (§17.2). Instrument it separately and watch it from day one.'],

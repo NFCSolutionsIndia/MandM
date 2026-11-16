@@ -108,7 +108,7 @@ apps/api/src/features/billing/__tests__/entitlements.test.ts
 
 **Free tier (§17.2):** 10 GB storage · **unlimited memories** · 3 pending capsules · 365-day horizon · 5-minute video · in-app + email channels.
 
-**Premium:** 250 GB · unlimited pending · unlimited horizon + age milestones · 30-minute video · all channels.
+**Premium:** 100 GB in India · 150 GB in US/EU (smaller caps in other markets, §17.2) · unlimited pending · unlimited horizon + age milestones · 30-minute video · all channels. Storage is a per-country entitlement, and +100 GB add-ons stack on it.
 
 **There is no `memories_per_month` column.** Appendix C-6 decided against an upload counter: it is a recurring monthly wall that teaches users not to upload, and it saves nothing (10 GB costs roughly \$0.15/month at full use). A test asserts the column's absence.
 

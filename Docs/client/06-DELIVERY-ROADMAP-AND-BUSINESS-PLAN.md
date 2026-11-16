@@ -158,8 +158,11 @@ by a count of memories created.**
 
 | | **Free** | **Premium** | **Family** |
 |---|---|---|---|
-| Price | ₹0 / $0 | **₹399/mo · ₹3,199/yr** (≈$8 / $72) | **₹749/mo · ₹5,999/yr** (≈$15 / $120) |
-| Storage | **10 GB** | **250 GB** | **2 TB pooled** |
+| Price — India | ₹0 | **₹399/mo · ₹3,999/yr** | **₹999/mo · ₹9,999/yr** |
+| Price — US | $0 | **$7.99/mo · $63.99/yr** | **$14.99/mo · $149.99/yr** |
+| Price — EU | €0 | **€7.49/mo · €64.99/yr** | **€13.99/mo · €139.99/yr** |
+| Storage | **10 GB** | **100 GB India · 150 GB US/EU** | **200 GB India · 300 GB US/EU, pooled** |
+| Extra storage add-on | ✗ | **+100 GB: ₹299/mo · $2.99/mo · €3.49/mo** (₹3,499 · $34.99 · €39.99 a year) | same |
 | Memories created per month | **unlimited** | unlimited | unlimited |
 | Originals preserved, never compressed | ✓ | ✓ | ✓ |
 | Video length per memory | 5 min | 30 min | 30 min |
@@ -170,10 +173,22 @@ by a count of memories created.**
 | Shared vaults | 1 (up to 3 members) | 5 (up to 10 members) | unlimited |
 | Collaborative capsules | contribute only | organise 2/year | unlimited |
 | Broadcasts (R2) | ✗ | 100 recipients/mo | 500 recipients/mo |
-| AI (R2) | semantic search only | search, transcripts, recaps, prompts | + stories, priority processing |
+| AI (R2) | semantic search; on-phone editing free; no cloud AI unless a Magic plan is bought | search, transcripts, recaps, prompts, 10 welcome AI credits | + stories, priority processing, 25 welcome credits shared |
+| Pending long-horizon capsule media | — | up to 10 GB | up to 10 GB per seat |
 | Heirs (R3) | ✗ | 1 | up to 5, with document storage |
-| Seats | 1 | 1 | **6** |
+| Seats | 1 | 1 | **5** |
 | Support | community | email | priority |
+
+Other markets keep their price with a smaller storage limit: South-East Asia 60 GB, Middle East
+150 GB, Latin America 75 GB, rest of world 125 GB.
+
+**The profit rule (decided November 2026).** A user who fills the whole plan from day one must
+still leave **at least 25% gross margin**, on monthly and yearly billing, after GST/VAT and the
+15% app store fee. Storage costs $0.018 per GB-month (Cloudflare R2 plus a backup copy) and
+every paying seat costs about $0.24 a month for servers, email and the AI allowance. Worst-case
+profit over 20 years per full user: Premium India $165–294, US $382–924, EU $281–658; Family
+India $485–811, US $966–1,474, EU $540–963. The full workings are in
+`MandM-Storage-and-AI-Plans.pptx` and blueprint §17.2 item 7.
 
 **Launch recommendation: ship Release 1 with Free and Premium only**, plus Stripe and Razorpay
 checkout and the billing portal. Add Family and any lifetime plan once retention data exists.
@@ -227,7 +242,7 @@ never count against the cap. Four reasons this beats "3 capsules then pay":
    both children at once is a natural, frequent family moment. **The cap converts — it simply
    does not teach restraint.**
 
-### 4.5 A sealed promise is never cancelled for non-payment
+### 4.5 When payment stops — and why a sealed promise is never cancelled
 
 **Non-negotiable.** If a Premium subscription lapses while capsules are scheduled beyond the
 free horizon, **those capsules are still delivered.** New long-horizon capsules require an
@@ -237,9 +252,42 @@ Enforced by **evaluating entitlements at seal time and storing nothing that woul
 downgrade to invalidate the promise.**
 
 This costs a little and is **the single most trust-building line in the entire pricing model** —
-and it is the only position consistent with a product that sells permanence. It extends the
-policy that memories are never deleted for non-payment. **Both must be written into the Terms,
+and it is the only position consistent with a product that sells permanence. It stays affordable
+because pending long-horizon capsule media is **capped at 10 GB** per account and sealed capsule
+media sits in **cold storage** until it is due.
+
+**The rest of a lapsed account follows the lapse policy (decided November 2026):**
+
+1. **Days 1–30 — read-only grace.** Nothing is deleted. Free export of everything, reminders,
+   and paying again restores it all.
+2. **Day 31 — the account becomes Free with 10 GB.**
+3. **Sealed capsules are kept first, then the memories the user chooses.**
+4. **Anything above 10 GB is deleted.**
+
+This replaces the earlier "memories are never deleted for non-payment" position, under which a
+single month of Premium filled to 100 GB lost about $429 over 20 years. **Both the capsule
+promise and the lapse policy must be written into the Terms and shown on the pricing page,
 not left as implementation behaviour.**
+
+### 4.5a AI editing and Magic plans
+
+Anything the phone can do itself is **free for everyone**, because it costs us nothing: remove,
+blur or recolour a background, crop, filters, trim, cut and join video, by voice or chat.
+Edits that need cloud AI (a new background, removing a person, a style such as watercolour)
+cost about $0.045 a try and are sold as **credits**. AI-generated video is **not offered**:
+at about $0.14 a second no plan price could cover it.
+
+| | India | US | EU | Credits |
+|---|---|---|---|---|
+| **Magic Lite** (monthly) | ₹199 | $2.99 | €2.99 | 25 in India · 30 in US/EU |
+| **Magic Plus** (monthly) | ₹799 | $7.99 | €7.99 | 100 |
+| **Top-up pack** (one-time) | ₹399 | $3.99 | €3.99 | 50, valid 12 months |
+
+- **1 credit = 1 try**, retries included. 2K premium quality uses 4 credits, 4K uses 6.
+- Monthly credits expire at month end; top-ups last 12 months. Up to 30 AI tries a day.
+- Any user can buy a Magic plan, Free included. In a Family, credits are shared.
+- **Welcome credits, once per account ever:** Free 3, Premium 10, Family 25 shared.
+- If an AI vendor raises its price, an edit uses more credits. A credit never loses money.
 
 ### 4.6 What was rejected, and why
 
@@ -252,7 +300,7 @@ not left as implementation behaviour.**
 | **"Unlimited" storage** | Unsurvivable. A single user with 2 TB of 4K video costs real money every month, forever, against a modest subscription — and this product's users **never delete anything, by design.** Generous honest tiers beat an unlimited promise that must later be broken. **Breaking a storage promise is fatal for a company whose product is trust** |
 | **A single paid tier** | Leaves no upgrade path. Family sharing and heirs are the natural high-tier hooks, and **households pay far more readily than individuals** |
 
-**Annual pricing is discounted ~25%.** Annual commitment is the right instinct for a product
+**Annual pricing is discounted 15–33% by market** (India ~16%, where the margin is thinnest; US ~33%). Annual commitment is the right instinct for a product
 about permanence, and it materially improves cash flow against storage costs paid monthly.
 
 **A lifetime plan is worth offering — carefully.** A "Forever" one-time purchase (~$399, capped
@@ -337,8 +385,9 @@ non-negotiables get renegotiated.
 
 1. **A sealed capsule is delivered.** The scheduler is database-owned. A missed unlock pages a
    human and is treated as **Sev-0**.
-2. **A sealed capsule is never cancelled for non-payment**, and memories are never deleted for
-   non-payment.
+2. **A sealed capsule is never cancelled for non-payment.** The rest of a lapsed account
+   follows the published lapse policy: 30 days read-only, then Free 10 GB, sealed capsules kept
+   first.
 3. **`/c/[token]` is server-rendered and works with JavaScript disabled.** A 2046 recipient must
    not be blocked by a 2026 framework assumption.
 4. **The local copy is written before the upload starts.** A memory is never at risk while an

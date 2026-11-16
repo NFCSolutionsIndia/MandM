@@ -203,7 +203,7 @@ The other launch-specific commitment is publishing \`docs/DELIVERY-GUARANTEE.md\
                     'One pricing page: Free and Premium per §17.2, with Family marked as coming, region-aware currency, and the free-tier sentence from §17.2.',
                     'Legal pages: Terms, Privacy Policy, Refund Policy, DPA.',
                     'The privacy policy includes the CSAM hash-matching disclosure from PHASE-08.',
-                    'The Terms include the two written policies: memories are never deleted for non-payment, and a sealed capsule is never cancelled for non-payment.',
+                    'The Terms include the two written policies: the lapse policy (30-day read-only grace, then Free 10 GB, sealed capsules kept first, anything above 10 GB deleted), and a sealed capsule is never cancelled for non-payment. Both are also stated on the pricing page.',
                     'An audit document resolving every Appendix B row.',
                     'The published delivery guarantee linked from the privacy page.',
                   ],
