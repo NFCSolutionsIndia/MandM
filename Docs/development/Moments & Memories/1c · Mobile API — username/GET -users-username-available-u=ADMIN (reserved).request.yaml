@@ -1,0 +1,17 @@
+$kind: http-request
+name: GET /users/username-available?u=ADMIN (reserved)
+description: Reserved names are refused in any case, and with . or _ added (ad.min, support_).
+url: "{{baseUrl}}/api/v1/users/username-available?u=ADMIN"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  u: ADMIN
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('not available', () => pm.expect(pm.response.json().available).to.eql(false));
+    language: text/javascript
+examples: ./.resources/GET -users-username-available-u=ADMIN (reserved).resources/examples
+order: 3000

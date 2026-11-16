@@ -1,0 +1,27 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+  queryParams:
+    u: "{{newUsername}}"
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "username": "aarav.k",
+        "available": false,
+        "reason": "taken",
+        "suggestions": [
+          "aarav.k1",
+          "aarav.k_",
+          "aaravk"
+        ]
+      }
+order: 2000

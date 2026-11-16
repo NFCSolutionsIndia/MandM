@@ -1,0 +1,17 @@
+$kind: http-request
+name: GET /media/:assetId/url
+description: |-
+  A signed GET, 300 seconds. That TTL is the bound on how long a revoked share can still be opened, which is why it is capped at 900 in the schema rather than left to taste.
+
+  Open the url in a browser to see the file. Strip the query string and it fails — the bucket is private.
+url: "{{baseUrl}}/api/v1/media/{{assetId}}/url"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('short-lived', () => pm.expect(pm.response.json().expiresInSeconds).to.be.at.most(900));
+    language: text/javascript
+order: 7000

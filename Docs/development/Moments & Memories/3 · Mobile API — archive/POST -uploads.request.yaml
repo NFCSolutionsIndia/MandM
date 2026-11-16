@@ -1,0 +1,34 @@
+$kind: http-request
+name: POST /uploads
+description: |-
+  Returns a URL you PUT the file to DIRECTLY. The bytes never pass through this server.
+
+  `bytes` must match the file exactly — ContentLength is signed into the URL, so R2 rejects a body of a different size. kind: image | video | audio.
+
+  The quota is checked here, before a byte moves.
+url: "{{baseUrl}}/api/v1/uploads"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "memoryId": "{{memoryId}}",
+      "filename": "photo.jpg",
+      "contentType": "image/jpeg",
+      "bytes": 2400000,
+      "kind": "image",
+      "clientId": "{{$guid}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.collectionVariables.set('uploadId', b.uploadId);
+      pm.collectionVariables.set('uploadUrl', b.url);
+      console.log('PUT the file to the url in uploadUrl, then run Complete.');
+    language: text/javascript
+order: 4000

@@ -3,22 +3,22 @@
 > **Living document.** Each new screenshot, requirement or decision updates this file, and gets a line in the [Changelog](#9-changelog) at the bottom.
 > If a task here disagrees with older planning docs (`phase-*/`, `00_PROJECT_PLAN.md`), this file wins for the work listed in it.
 
-| | |
-|---|---|
-| **Milestone** | **#2611.02** |
-| **Current feature** | People (members): required by milestone capsules |
+|                        |                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Milestone**          | **#2611.02**                                                                                                       |
+| **Current feature**    | People (members): required by milestone capsules                                                                   |
 | **Also in this round** | App version API · sessions (access/refresh/idle) · OTP over email or phone · usernames · search · upcoming moments |
-| **Last updated** | 2026-11-13 |
+| **Last updated**       | 2026-11-13                                                                                                         |
 
 **Team**
 
-| Person | Role | Owns in this round |
-|---|---|---|
-| **Akshara** (Akshara Perala) | Backend | Sign-in and sessions: tokens, idle logout, OTP channels, SMS, usernames, admin users API |
-| **Omsai** | Backend | People API, app-version API, upcoming moments, search |
-| **saig** | Mobile | App-version gate, sign-in screens, token handling, profile/username |
-| **saib** | Mobile | People screens, capsule person picker, Home "upcoming moments", Search screen |
-| **Naveen** | Admin web | App-version management, users and sessions pages, sign-in settings |
+| Person                       | Role      | Owns in this round                                                                       |
+| ---------------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| **Akshara** (Akshara Peraka) | Backend   | Sign-in and sessions: tokens, idle logout, OTP channels, SMS, usernames, admin users API |
+| **Omsai**                    | Backend   | People API, app-version API, upcoming moments, search                                    |
+| **saig**                     | Mobile    | App-version gate, sign-in screens, token handling, profile/username                      |
+| **saib**                     | Mobile    | People screens, capsule person picker, Home "upcoming moments", Search screen            |
+| **Naveen**                   | Admin web | App-version management, users and sessions pages, sign-in settings                       |
 
 ---
 
@@ -28,21 +28,21 @@
 
 Each task in [§5](#5-tickets) follows the field order of the ticket form, so it can be copied in field by field:
 
-| Ticket field | What goes in it |
-|---|---|
-| **Summary** | `[ID] title`, for example `[BE-01] Access token (1 day) + refresh token (30 days) + 7-day idle logout`. Keeping the ID in the summary links the ticket back to this doc. |
-| **Description** | The copy block under **Description**. It is plain text, written to read correctly in a plain text box. |
-| **Assign To** | The owner named in the ticket card |
-| **Reproducibility** | Leave at **Have not tried** (or N/A if the list has it). These are build tasks, not bugs. |
-| **Severity** | **Low** for build tasks. Severity is for bugs. |
-| **Priority** | From the card: **High** = Wave 1 and other tasks depend on it, **Normal** = Wave 2, **Low** = nice to have |
-| **Steps To Reproduce** | Used as **How to test**: the steps a reviewer follows to check the work is done |
-| **Additional Information** | Dependencies, open decisions, the migration slot and files to read |
-| **Attach Tags** | From the card, comma-separated |
-| **Estimate** | From the card, in `hh:mm` using 15-minute steps. The form allows **23:45 at most**, so any task bigger than that is split into separate tickets. |
-| **Task Type** | **Task** |
-| **Worked Hours** | 0 at creation. The developer updates it. |
-| **Upload Files** | Any screenshot the task was based on (see §8) |
+| Ticket field               | What goes in it                                                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Summary**                | `[ID] title`, for example `[BE-01] Access token (1 day) + refresh token (30 days) + 7-day idle logout`. Keeping the ID in the summary links the ticket back to this doc. |
+| **Description**            | The copy block under **Description**. It is plain text, written to read correctly in a plain text box.                                                                   |
+| **Assign To**              | The owner named in the ticket card                                                                                                                                       |
+| **Reproducibility**        | Leave at **Have not tried** (or N/A if the list has it). These are build tasks, not bugs.                                                                                |
+| **Severity**               | **Low** for build tasks. Severity is for bugs.                                                                                                                           |
+| **Priority**               | From the card: **High** = Wave 1 and other tasks depend on it, **Normal** = Wave 2, **Low** = nice to have                                                               |
+| **Steps To Reproduce**     | Used as **How to test**: the steps a reviewer follows to check the work is done                                                                                          |
+| **Additional Information** | Dependencies, open decisions, the migration slot and files to read                                                                                                       |
+| **Attach Tags**            | From the card, comma-separated                                                                                                                                           |
+| **Estimate**               | From the card, in `hh:mm` using 15-minute steps. The form allows **23:45 at most**, so any task bigger than that is split into separate tickets.                         |
+| **Task Type**              | **Task**                                                                                                                                                                 |
+| **Worked Hours**           | 0 at creation. The developer updates it.                                                                                                                                 |
+| **Upload Files**           | Any screenshot the task was based on (see §8)                                                                                                                            |
 
 ### Other rules
 
@@ -56,16 +56,16 @@ Each task in [§5](#5-tickets) follows the field order of the ticket form, so it
 
 ## 2. What exists today (checked against the code on 2026-11-13)
 
-| # | Requirement | Status | What is there now |
-|---|---|---|---|
-| 1 | App-version API, separate for iOS and Android | ❌ Not built | `devices.app_version` stores each device's version. There is no table of latest or minimum versions and no endpoint. |
-| 2 | Log out after 7 days of inactivity | ❌ Not built | A session lasts 30 days and every request extends it (`app_touch_session`). An idle user stays signed in for up to 30 days. |
-| 3 | Access token 1 day, refresh token 30 days | ⚠️ Partly built | There is one opaque session token with a 30-day rolling lifetime (`sessions` table, `POST /auth/verify`). There is no refresh token and no 1-day access token. |
-| 4 | OTP by email or phone, chosen in `.env` | ⚠️ Email only | Email OTP works: 6 digits, 10-minute expiry, 5 attempts, 5 codes per hour. `users.phone` exists as a column, but there is no SMS sending, no phone OTP and no `.env` switch. `users.email` is NOT NULL, so a phone-only account cannot be created yet. |
-| 5 | Unique auto-generated username | ❌ Not built | `users` has no username column. |
-| 6 | Search: people, chats, moments | ❌ Not built | Groundwork exists: `memories.search_text` with full-text and trigram indexes (migration 0004). **There is no chat feature anywhere in the backend.** |
-| 7 | Upcoming moments (5 items) | ❌ Not built | The data to build it from exists: `capsules.unlock_at` and member/event birthdays and anniversaries. |
-| — | **People (members)** | ⚠️ Database only | The `members` table, its row-level security and `test/people.e2e-spec.ts` exist. There is **no API**. `capsules.milestone_member_id` and `capsule_recipients.member_id` already point at `members`. |
+| #   | Requirement                                   | Status           | What is there now                                                                                                                                                                                                                                      |
+| --- | --------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | App-version API, separate for iOS and Android | ❌ Not built     | `devices.app_version` stores each device's version. There is no table of latest or minimum versions and no endpoint.                                                                                                                                   |
+| 2   | Log out after 7 days of inactivity            | ❌ Not built     | A session lasts 30 days and every request extends it (`app_touch_session`). An idle user stays signed in for up to 30 days.                                                                                                                            |
+| 3   | Access token 1 day, refresh token 30 days     | ⚠️ Partly built  | There is one opaque session token with a 30-day rolling lifetime (`sessions` table, `POST /auth/verify`). There is no refresh token and no 1-day access token.                                                                                         |
+| 4   | OTP by email or phone, chosen in `.env`       | ⚠️ Email only    | Email OTP works: 6 digits, 10-minute expiry, 5 attempts, 5 codes per hour. `users.phone` exists as a column, but there is no SMS sending, no phone OTP and no `.env` switch. `users.email` is NOT NULL, so a phone-only account cannot be created yet. |
+| 5   | Unique auto-generated username                | ❌ Not built     | `users` has no username column.                                                                                                                                                                                                                        |
+| 6   | Search: people, chats, moments                | ❌ Not built     | Groundwork exists: `memories.search_text` with full-text and trigram indexes (migration 0004). **There is no chat feature anywhere in the backend.**                                                                                                   |
+| 7   | Upcoming moments (5 items)                    | ❌ Not built     | The data to build it from exists: `capsules.unlock_at` and member/event birthdays and anniversaries.                                                                                                                                                   |
+| —   | **People (members)**                          | ⚠️ Database only | The `members` table, its row-level security and `test/people.e2e-spec.ts` exist. There is **no API**. `capsules.milestone_member_id` and `capsule_recipients.member_id` already point at `members`.                                                    |
 
 ---
 
@@ -73,17 +73,17 @@ Each task in [§5](#5-tickets) follows the field order of the ticket form, so it
 
 Tickets marked **⛔ blocked** in §7 are waiting on these. Each one has a recommended default. If nobody objects, the default stands.
 
-| ID | Question | Recommended default | Blocks |
-|---|---|---|---|
-| **D-1** | Is the 30-day refresh lifetime **rolling** (each refresh issues a new 30-day token, so an active user is never logged out) or **absolute** (everyone signs in again every 30 days, however active)? | **Rolling.** A 7-day idle limit already logs out inactive users. | BE-01 |
-| **D-2** | Keep **opaque tokens** (a database row, revocable instantly) or switch access tokens to **JWT**? | **Opaque, for both tokens.** The API already checks the session on every request for row-level security, so a JWT saves nothing and loses instant "sign out that device". | BE-01 |
-| **D-3** | When **both** email and phone OTP are enabled, does the user **pick one**, or must they **verify both** at sign-up? | **Pick one.** The other can be added and verified later from Profile. | BE-02, MOB-02 |
-| **D-4** | Which **SMS provider** sends phone OTPs? | **MSG91** for India (DLT-registered template), with Twilio as an option for other countries. Needs a company account and a registered sender ID before go-live. | BE-09 |
-| **D-5** | Can a user **change** their auto-generated username? | **Yes**, at most once every 14 days, with an availability check. | BE-03, MOB-03 |
-| **D-6** | In search, does **"people"** mean only **my saved members**, or also **other app users found by username** (like Instagram)? | **My members only for now.** Making every account findable by username is a privacy decision for a private family vault and needs a "who can find me" setting first. | BE-07, MOB-06 |
-| **D-7** | **"Chats"** does not exist in the product yet. What is a chat? | Search returns `chats: []` until a chat feature is specified. The response shape is fixed now, so mobile will not need to change later. | BE-07, MOB-06 |
-| **D-8** | What counts as an **upcoming moment**? | Sealed capsules I sent that have not opened yet, plus upcoming birthdays and anniversaries of my people and my own events. Soonest first, 5 items. **The Home screenshot would settle this.** | BE-06, MOB-05 |
-| **D-9** | Mobile split: are iOS (Swift) and Android (Kotlin) **separate codebases**? | If separate: **saig = iOS, saib = Android**, and each MOB ticket is created **twice**, once per platform, with the summary suffixed `(iOS)` / `(Android)`. If shared: one ticket each, split by feature as in §5. | all MOB |
+| ID      | Question                                                                                                                                                                                            | Recommended default                                                                                                                                                                                               | Blocks        |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **D-1** | Is the 30-day refresh lifetime **rolling** (each refresh issues a new 30-day token, so an active user is never logged out) or **absolute** (everyone signs in again every 30 days, however active)? | **Rolling.** A 7-day idle limit already logs out inactive users.                                                                                                                                                  | BE-01         |
+| **D-2** | Keep **opaque tokens** (a database row, revocable instantly) or switch access tokens to **JWT**?                                                                                                    | **Opaque, for both tokens.** The API already checks the session on every request for row-level security, so a JWT saves nothing and loses instant "sign out that device".                                         | BE-01         |
+| **D-3** | When **both** email and phone OTP are enabled, does the user **pick one**, or must they **verify both** at sign-up?                                                                                 | **Pick one.** The other can be added and verified later from Profile.                                                                                                                                             | BE-02, MOB-02 |
+| **D-4** | Which **SMS provider** sends phone OTPs?                                                                                                                                                            | **MSG91** for India (DLT-registered template), with Twilio as an option for other countries. Needs a company account and a registered sender ID before go-live.                                                   | BE-09         |
+| **D-5** | Can a user **change** their auto-generated username?                                                                                                                                                | **Yes**, at most once every 14 days, with an availability check.                                                                                                                                                  | BE-03, MOB-03 |
+| **D-6** | In search, does **"people"** mean only **my saved members**, or also **other app users found by username** (like Instagram)?                                                                        | **My members only for now.** Making every account findable by username is a privacy decision for a private family vault and needs a "who can find me" setting first.                                              | BE-07, MOB-06 |
+| **D-7** | **"Chats"** does not exist in the product yet. What is a chat?                                                                                                                                      | Search returns `chats: []` until a chat feature is specified. The response shape is fixed now, so mobile will not need to change later.                                                                           | BE-07, MOB-06 |
+| **D-8** | What counts as an **upcoming moment**?                                                                                                                                                              | Sealed capsules I sent that have not opened yet, plus upcoming birthdays and anniversaries of my people and my own events. Soonest first, 5 items. **The Home screenshot would settle this.**                     | BE-06, MOB-05 |
+| **D-9** | Mobile split: are iOS (Swift) and Android (Kotlin) **separate codebases**?                                                                                                                          | If separate: **saig = iOS, saib = Android**, and each MOB ticket is created **twice**, once per platform, with the summary suffixed `(iOS)` / `(Android)`. If shared: one ticket each, split by feature as in §5. | all MOB       |
 
 ---
 
@@ -108,13 +108,13 @@ to the real API as soon as its backend ticket is "done".
 
 Everyone commits to `main`, and every green push to `main` deploys and migrates `mm_prod`. **Only one migration may be in flight at a time**, in this order:
 
-| Slot | Migration | Owner | Ticket |
-|---|---|---|---|
-| 1 | `app_versions` table | Omsai | BE-05 |
-| 2 | Sessions: refresh token, access expiry, `last_active_at` | Akshara | BE-01 |
-| 3 | `users.username` plus a backfill for existing users | Akshara | BE-03 |
-| 4 | OTP channel and phone: generalise `email_otps`, make `users.email` nullable, unique phone | Akshara | BE-02 |
-| 5 | Indexes for upcoming moments and search, if `EXPLAIN` shows they are needed | Omsai | BE-06 / BE-07 |
+| Slot | Migration                                                                                 | Owner   | Ticket        |
+| ---- | ----------------------------------------------------------------------------------------- | ------- | ------------- |
+| 1    | `app_versions` table                                                                      | Omsai   | BE-05         |
+| 2    | Sessions: refresh token, access expiry, `last_active_at`                                  | Akshara | BE-01         |
+| 3    | `users.username` plus a backfill for existing users                                       | Akshara | BE-03         |
+| 4    | OTP channel and phone: generalise `email_otps`, make `users.email` nullable, unique phone | Akshara | BE-02         |
+| 5    | Indexes for upcoming moments and search, if `EXPLAIN` shows they are needed               | Omsai   | BE-06 / BE-07 |
 
 Before merging a migration: pull `main`, regenerate if another migration landed, run it on **local Docker** (never on `mm_prod` by hand), and have the database reviewer (or the database agent, §6) check its row-level security, grants and backfill.
 
@@ -130,9 +130,9 @@ All tickets: **Milestone #2611.02 · Task Type: Task · Reproducibility: Have no
 
 #### BE-01 · Access token (1 day) + refresh token (30 days) + 7-day idle logout
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-01] Access token (1 day) + refresh token (30 days) + 7-day idle logout` | Akshara Perala | High | 16:00 | `backend,auth,sessions,migration` |
+| Summary                                                                      | Assign To      | Priority | Estimate | Tags                              |
+| ---------------------------------------------------------------------------- | -------------- | -------- | -------- | --------------------------------- |
+| `[BE-01] Access token (1 day) + refresh token (30 days) + 7-day idle logout` | Akshara Peraka | High     | 16:00    | `backend,auth,sessions,migration` |
 
 **Description**
 
@@ -204,9 +204,9 @@ Breaking change for /auth/verify. Tell saig (MOB-02, MOB-07) when the Postman ex
 
 #### BE-02 · OTP channel switch (email / phone) + phone accounts
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-02] OTP over email or phone, switchable in .env` | Akshara Perala | Normal | 14:00 | `backend,auth,otp,migration` |
+| Summary                                               | Assign To      | Priority | Estimate | Tags                         |
+| ----------------------------------------------------- | -------------- | -------- | -------- | ---------------------------- |
+| `[BE-02] OTP over email or phone, switchable in .env` | Akshara Peraka | Normal   | 14:00    | `backend,auth,otp,migration` |
 
 **Description**
 
@@ -269,9 +269,9 @@ The SMS provider is a separate ticket: BE-09.
 
 #### BE-09 · SMS provider integration for phone OTP
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-09] SMS provider integration (SmsService) for phone OTP` | Akshara Perala | Normal | 08:00 | `backend,auth,otp,sms` |
+| Summary                                                       | Assign To      | Priority | Estimate | Tags                   |
+| ------------------------------------------------------------- | -------------- | -------- | -------- | ---------------------- |
+| `[BE-09] SMS provider integration (SmsService) for phone OTP` | Akshara Peraka | Normal   | 08:00    | `backend,auth,otp,sms` |
 
 **Description**
 
@@ -312,9 +312,9 @@ No migration.
 
 #### BE-03 · Unique auto-generated username
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-03] Unique auto-generated username for every user` | Akshara Perala | High | 10:00 | `backend,users,migration` |
+| Summary                                                 | Assign To      | Priority | Estimate | Tags                      |
+| ------------------------------------------------------- | -------------- | -------- | -------- | ------------------------- |
+| `[BE-03] Unique auto-generated username for every user` | Akshara Peraka | High     | 10:00    | `backend,users,migration` |
 
 **Description**
 
@@ -369,9 +369,9 @@ Read first: migration 0009 (app_redeem_email_code creates the user), backend/src
 
 #### BE-08 · Admin API: users and sessions
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-08] Admin API: users search and session revoke` | Akshara Perala | Normal | 08:00 | `backend,admin,sessions` |
+| Summary                                              | Assign To      | Priority | Estimate | Tags                     |
+| ---------------------------------------------------- | -------------- | -------- | -------- | ------------------------ |
+| `[BE-08] Admin API: users search and session revoke` | Akshara Peraka | Normal   | 08:00    | `backend,admin,sessions` |
 
 **Description**
 
@@ -418,9 +418,9 @@ No migration expected. If one is needed, it takes the next free slot.
 
 #### BE-04 · People (members) API ← the main feature in this round
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-04] People (members) API: create, list, edit, delete` | Omsai | High | 14:00 | `backend,people,capsules` |
+| Summary                                                    | Assign To | Priority | Estimate | Tags                      |
+| ---------------------------------------------------------- | --------- | -------- | -------- | ------------------------- |
+| `[BE-04] People (members) API: create, list, edit, delete` | Omsai     | High     | 14:00    | `backend,people,capsules` |
 
 **Description**
 
@@ -479,9 +479,9 @@ Publish the Postman examples on day 1. saib (MOB-04, MOB-08) builds against them
 
 #### BE-05 · App version API (iOS and Android separately)
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-05] App version API, separate for iOS and Android` | Omsai | High | 08:00 | `backend,app-version,admin,migration` |
+| Summary                                                 | Assign To | Priority | Estimate | Tags                                  |
+| ------------------------------------------------------- | --------- | -------- | -------- | ------------------------------------- |
+| `[BE-05] App version API, separate for iOS and Android` | Omsai     | High     | 08:00    | `backend,app-version,admin,migration` |
 
 **Description**
 
@@ -541,9 +541,9 @@ Used by: MOB-01 (saig), ADM-01 (Naveen). Publish the Postman examples on day 1.
 
 #### BE-06 · Upcoming moments (5 items, for the Home screen)
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-06] Upcoming moments API (5 items for Home)` | Omsai | Normal | 10:00 | `backend,home,capsules,people` |
+| Summary                                           | Assign To | Priority | Estimate | Tags                           |
+| ------------------------------------------------- | --------- | -------- | -------- | ------------------------------ |
+| `[BE-06] Upcoming moments API (5 items for Home)` | Omsai     | Normal   | 10:00    | `backend,home,capsules,people` |
 
 **Description**
 
@@ -599,9 +599,9 @@ Used by: MOB-05 (saib).
 
 #### BE-07 · Search: people, chats, moments
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[BE-07] Search API: people, chats, moments` | Omsai | Normal | 12:00 | `backend,search` |
+| Summary                                      | Assign To | Priority | Estimate | Tags             |
+| -------------------------------------------- | --------- | -------- | -------- | ---------------- |
+| `[BE-07] Search API: people, chats, moments` | Omsai     | Normal   | 12:00    | `backend,search` |
 
 **Description**
 
@@ -660,9 +660,9 @@ Used by: MOB-06 (saib).
 
 #### MOB-01 · App version check and force update
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-01] App version check: force update and update banner` | saig | High | 06:00 | `mobile,app-version` |
+| Summary                                                      | Assign To | Priority | Estimate | Tags                 |
+| ------------------------------------------------------------ | --------- | -------- | -------- | -------------------- |
+| `[MOB-01] App version check: force update and update banner` | saig      | High     | 06:00    | `mobile,app-version` |
 
 **Description**
 
@@ -701,9 +701,9 @@ Depends on: the BE-05 contract (Postman examples). Can start now.
 
 #### MOB-02 · Sign-in and OTP screens (channel driven by server)
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-02] Sign-in and OTP screens, channels from /auth/config` | saig | High | 12:00 | `mobile,auth,otp` |
+| Summary                                                        | Assign To | Priority | Estimate | Tags              |
+| -------------------------------------------------------------- | --------- | -------- | -------- | ----------------- |
+| `[MOB-02] Sign-in and OTP screens, channels from /auth/config` | saig      | High     | 12:00    | `mobile,auth,otp` |
 
 **Description**
 
@@ -746,9 +746,9 @@ Token storage and refresh are a separate ticket: MOB-07.
 
 #### MOB-07 · Token storage, refresh and 7-day idle logout
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-07] Secure token storage, auto refresh on 401, idle logout` | saig | High | 10:00 | `mobile,auth,sessions` |
+| Summary                                                           | Assign To | Priority | Estimate | Tags                   |
+| ----------------------------------------------------------------- | --------- | -------- | -------- | ---------------------- |
+| `[MOB-07] Secure token storage, auto refresh on 401, idle logout` | saig      | High     | 10:00    | `mobile,auth,sessions` |
 
 **Description**
 
@@ -790,9 +790,9 @@ Coordinate with BE-01: the refresh token is single-use, so any parallel refresh 
 
 #### MOB-03 · Profile: username
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-03] Profile: show and change username` | saig | Normal | 06:00 | `mobile,profile,users` |
+| Summary                                      | Assign To | Priority | Estimate | Tags                   |
+| -------------------------------------------- | --------- | -------- | -------- | ---------------------- |
+| `[MOB-03] Profile: show and change username` | saig      | Normal   | 06:00    | `mobile,profile,users` |
 
 **Description**
 
@@ -829,9 +829,9 @@ Depends on: D-5, the BE-03 contract.
 
 #### MOB-04 · People screens (list, add/edit, detail)
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-04] People screens: list, add/edit person, person detail` | saib | High | 16:00 | `mobile,people` |
+| Summary                                                         | Assign To | Priority | Estimate | Tags            |
+| --------------------------------------------------------------- | --------- | -------- | -------- | --------------- |
+| `[MOB-04] People screens: list, add/edit person, person detail` | saib      | High     | 16:00    | `mobile,people` |
 
 **Description**
 
@@ -874,9 +874,9 @@ The capsule flow picker is a separate ticket: MOB-08.
 
 #### MOB-08 · Capsule flow: choose person + milestone birthday
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-08] Capsule flow: person picker and milestone birthday prompt` | saib | High | 06:00 | `mobile,people,capsules` |
+| Summary                                                              | Assign To | Priority | Estimate | Tags                     |
+| -------------------------------------------------------------------- | --------- | -------- | -------- | ------------------------ |
+| `[MOB-08] Capsule flow: person picker and milestone birthday prompt` | saib      | High     | 06:00    | `mobile,people,capsules` |
 
 **Description**
 
@@ -911,9 +911,9 @@ Depends on: MOB-04, the BE-04 contract.
 
 #### MOB-05 · Home: upcoming moments
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-05] Home: upcoming moments cards (5 items)` | saib | Normal | 08:00 | `mobile,home` |
+| Summary                                           | Assign To | Priority | Estimate | Tags          |
+| ------------------------------------------------- | --------- | -------- | -------- | ------------- |
+| `[MOB-05] Home: upcoming moments cards (5 items)` | saib      | Normal   | 08:00    | `mobile,home` |
 
 **Description**
 
@@ -949,9 +949,9 @@ Layout: waiting for the Home screenshot (§8).
 
 #### MOB-06 · Search screen
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[MOB-06] Search screen: All / People / Chats / Moments tabs` | saib | Normal | 12:00 | `mobile,search` |
+| Summary                                                       | Assign To | Priority | Estimate | Tags            |
+| ------------------------------------------------------------- | --------- | -------- | -------- | --------------- |
+| `[MOB-06] Search screen: All / People / Chats / Moments tabs` | saib      | Normal   | 12:00    | `mobile,search` |
 
 **Description**
 
@@ -991,9 +991,9 @@ Depends on: D-6, D-7, the BE-07 contract.
 
 #### ADM-01 · App versions page
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[ADM-01] Admin: app versions page (iOS and Android)` | Naveen | High | 08:00 | `admin,app-version` |
+| Summary                                               | Assign To | Priority | Estimate | Tags                |
+| ----------------------------------------------------- | --------- | -------- | -------- | ------------------- |
+| `[ADM-01] Admin: app versions page (iOS and Android)` | Naveen    | High     | 08:00    | `admin,app-version` |
 
 **Description**
 
@@ -1031,9 +1031,9 @@ Read admin/AGENTS.md first (this Next.js version differs from the usual docs).
 
 #### ADM-02 · Users and sessions pages
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[ADM-02] Admin: users list, user detail, sign out all devices` | Naveen | Normal | 12:00 | `admin,users,sessions` |
+| Summary                                                         | Assign To | Priority | Estimate | Tags                   |
+| --------------------------------------------------------------- | --------- | -------- | -------- | ---------------------- |
+| `[ADM-02] Admin: users list, user detail, sign out all devices` | Naveen    | Normal   | 12:00    | `admin,users,sessions` |
 
 **Description**
 
@@ -1067,9 +1067,9 @@ Depends on: the BE-08 contract.
 
 #### ADM-03 · Sign-in settings (read-only)
 
-| Summary | Assign To | Priority | Estimate | Tags |
-|---|---|---|---|---|
-| `[ADM-03] Admin: sign-in settings panel (read-only)` | Naveen | Low | 02:00 | `admin,auth` |
+| Summary                                              | Assign To | Priority | Estimate | Tags         |
+| ---------------------------------------------------- | --------- | -------- | -------- | ------------ |
+| `[ADM-03] Admin: sign-in settings panel (read-only)` | Naveen    | Low      | 02:00    | `admin,auth` |
 
 **Description**
 
@@ -1102,12 +1102,12 @@ Depends on: the BE-02 contract.
 
 ### Proposed agents (`.claude/agents/*.md`, committed to git)
 
-| Agent | Does | Must never | Mainly used by |
-|---|---|---|---|
-| **backend-agent** | NestJS + Fastify endpoints, zod DTOs, services, `SECURITY DEFINER` functions, `env.schema.ts` entries, Postman examples | Read `process.env` outside `env.schema.ts`, take an owner id from the request, connect as `postgres` | Akshara, Omsai |
-| **database-agent** | Drizzle schema, generated + hand-written migrations, row-level security policies, grants for `mm_app` / `mm_admin` / `mm_worker` / support, backfills, `EXPLAIN` checks. **Reviews every migration before merge.** | Run anything against `mm_prod`, use `timestamp without time zone`, merge while another migration is in flight | Akshara, Omsai |
-| **admin-frontend-agent** | Admin pages in `admin/` (the version of Next.js in use, which per `admin/AGENTS.md` means reading the docs in `node_modules/next` first), the API client, forms and validation | Call the mobile API realm, put secrets in client code | Naveen |
-| **testing-agent** | Vitest unit + e2e tests (`backend/test/*.e2e-spec.ts`) against local Docker `mm_test`, Postman collection tests, CI fixes, a test for each "How to test" step in this doc | Point the suite at `mm_prod`: it truncates every table | everyone |
+| Agent                    | Does                                                                                                                                                                                                               | Must never                                                                                                    | Mainly used by |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | -------------- |
+| **backend-agent**        | NestJS + Fastify endpoints, zod DTOs, services, `SECURITY DEFINER` functions, `env.schema.ts` entries, Postman examples                                                                                            | Read `process.env` outside `env.schema.ts`, take an owner id from the request, connect as `postgres`          | Akshara, Omsai |
+| **database-agent**       | Drizzle schema, generated + hand-written migrations, row-level security policies, grants for `mm_app` / `mm_admin` / `mm_worker` / support, backfills, `EXPLAIN` checks. **Reviews every migration before merge.** | Run anything against `mm_prod`, use `timestamp without time zone`, merge while another migration is in flight | Akshara, Omsai |
+| **admin-frontend-agent** | Admin pages in `admin/` (the version of Next.js in use, which per `admin/AGENTS.md` means reading the docs in `node_modules/next` first), the API client, forms and validation                                     | Call the mobile API realm, put secrets in client code                                                         | Naveen         |
+| **testing-agent**        | Vitest unit + e2e tests (`backend/test/*.e2e-spec.ts`) against local Docker `mm_test`, Postman collection tests, CI fixes, a test for each "How to test" step in this doc                                          | Point the suite at `mm_prod`: it truncates every table                                                        | everyone       |
 
 **Admin backend agent:** not needed yet. The admin API is small (BE-05, BE-08) and follows the backend rules, so it is a section inside **backend-agent**. Split it out only if the admin API grows a lot.
 
@@ -1138,28 +1138,28 @@ New requirement / screenshot
 
 Milestone #2611.02. The ticket tool is the live status; this table mirrors it.
 
-| Ticket | Title | Owner | Priority | Estimate | Status | Blocked by |
-|---|---|---|---|---:|---|---|
-| BE-01 | Access + refresh tokens, 7-day idle | Akshara | High | 16:00 | ⛔ blocked | D-1, D-2 |
-| BE-02 | OTP email / phone via `.env` | Akshara | Normal | 14:00 | ⛔ blocked | D-3, BE-01 |
-| BE-09 | SMS provider integration | Akshara | Normal | 08:00 | ⛔ blocked | D-4, BE-02 |
-| BE-03 | Auto-generated username | Akshara | High | 10:00 | todo | D-5 (editing only) |
-| BE-08 | Admin users & sessions API | Akshara | Normal | 08:00 | todo | BE-01, BE-03 |
-| BE-04 | People (members) API | Omsai | High | 14:00 | todo | — |
-| BE-05 | App version API | Omsai | High | 08:00 | todo | — |
-| BE-06 | Upcoming moments | Omsai | Normal | 10:00 | ⛔ blocked | D-8, BE-04 |
-| BE-07 | Search | Omsai | Normal | 12:00 | ⛔ blocked | D-6, D-7, BE-04 |
-| MOB-01 | Version check / force update | saig | High | 06:00 | todo | BE-05 contract |
-| MOB-02 | Sign-in and OTP screens | saig | High | 12:00 | ⛔ blocked | D-3, BE-01/02 contracts |
-| MOB-07 | Token storage, refresh, idle logout | saig | High | 10:00 | todo | BE-01 contract |
-| MOB-03 | Profile username | saig | Normal | 06:00 | ⛔ blocked | D-5 |
-| MOB-04 | People screens | saib | High | 16:00 | todo | BE-04 contract |
-| MOB-08 | Capsule person picker + milestone birthday | saib | High | 06:00 | todo | MOB-04 |
-| MOB-05 | Home upcoming moments | saib | Normal | 08:00 | ⛔ blocked | D-8 |
-| MOB-06 | Search screen | saib | Normal | 12:00 | ⛔ blocked | D-6, D-7 |
-| ADM-01 | App versions page | Naveen | High | 08:00 | todo | BE-05 contract |
-| ADM-02 | Users & sessions pages | Naveen | Normal | 12:00 | todo | BE-08 contract |
-| ADM-03 | Sign-in settings (read-only) | Naveen | Low | 02:00 | todo | BE-02 contract |
+| Ticket | Title                                      | Owner   | Priority | Estimate | Status     | Blocked by              |
+| ------ | ------------------------------------------ | ------- | -------- | -------: | ---------- | ----------------------- |
+| BE-01  | Access + refresh tokens, 7-day idle        | Akshara | High     |    16:00 | ⛔ blocked | D-1, D-2                |
+| BE-02  | OTP email / phone via `.env`               | Akshara | Normal   |    14:00 | ⛔ blocked | D-3, BE-01              |
+| BE-09  | SMS provider integration                   | Akshara | Normal   |    08:00 | ⛔ blocked | D-4, BE-02              |
+| BE-03  | Auto-generated username                    | Akshara | High     |    10:00 | todo       | D-5 (editing only)      |
+| BE-08  | Admin users & sessions API                 | Akshara | Normal   |    08:00 | todo       | BE-01, BE-03            |
+| BE-04  | People (members) API                       | Omsai   | High     |    14:00 | todo       | —                       |
+| BE-05  | App version API                            | Omsai   | High     |    08:00 | todo       | —                       |
+| BE-06  | Upcoming moments                           | Omsai   | Normal   |    10:00 | ⛔ blocked | D-8, BE-04              |
+| BE-07  | Search                                     | Omsai   | Normal   |    12:00 | ⛔ blocked | D-6, D-7, BE-04         |
+| MOB-01 | Version check / force update               | saig    | High     |    06:00 | todo       | BE-05 contract          |
+| MOB-02 | Sign-in and OTP screens                    | saig    | High     |    12:00 | ⛔ blocked | D-3, BE-01/02 contracts |
+| MOB-07 | Token storage, refresh, idle logout        | saig    | High     |    10:00 | todo       | BE-01 contract          |
+| MOB-03 | Profile username                           | saig    | Normal   |    06:00 | ⛔ blocked | D-5                     |
+| MOB-04 | People screens                             | saib    | High     |    16:00 | todo       | BE-04 contract          |
+| MOB-08 | Capsule person picker + milestone birthday | saib    | High     |    06:00 | todo       | MOB-04                  |
+| MOB-05 | Home upcoming moments                      | saib    | Normal   |    08:00 | ⛔ blocked | D-8                     |
+| MOB-06 | Search screen                              | saib    | Normal   |    12:00 | ⛔ blocked | D-6, D-7                |
+| ADM-01 | App versions page                          | Naveen  | High     |    08:00 | todo       | BE-05 contract          |
+| ADM-02 | Users & sessions pages                     | Naveen  | Normal   |    12:00 | todo       | BE-08 contract          |
+| ADM-03 | Sign-in settings (read-only)               | Naveen  | Low      |    02:00 | todo       | BE-02 contract          |
 
 **Estimated hours by person:** Akshara 56:00 · Omsai 44:00 · saig 34:00 · saib 42:00 · Naveen 22:00. If D-9 = separate codebases, saig and saib each carry all MOB tickets (76:00 each).
 
@@ -1173,7 +1173,7 @@ Milestone #2611.02. The ticket tool is the live status; this table mirrors it.
 
 ## 9. Changelog
 
-| Date | Change |
-|---|---|
-| 2026-11-13 | Document created. The 7 requirements were checked against the code (§2). Tasks BE-01…08, MOB-01…06 and ADM-01…03 were written, decisions D-1…D-9 were opened, and the AI agent plan was added (§6). |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-13 | Document created. The 7 requirements were checked against the code (§2). Tasks BE-01…08, MOB-01…06 and ADM-01…03 were written, decisions D-1…D-9 were opened, and the AI agent plan was added (§6).                                                                                                                                                                                                                                                                                                            |
 | 2026-11-13 | Every task rewritten as a ticket matching the ticket form's fields (Summary, Description, Assign To, Priority, Steps To Reproduce = how to test, Additional Information, Tags, Estimate). Milestone #2611.02 added. Estimates added (max 23:45 per ticket). To fit, BE-02 was split (SMS sending moved to new **BE-09**), MOB-02 was split (token handling moved to new **MOB-07**), and MOB-04 was split (capsule picker moved to new **MOB-08**). BE-03 unblocked for generation (D-5 only affects editing). |

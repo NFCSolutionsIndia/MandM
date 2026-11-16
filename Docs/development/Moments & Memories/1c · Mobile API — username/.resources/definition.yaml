@@ -1,0 +1,3 @@
+$kind: collection
+description: 'BE-03. Every account gets a username at sign-up (from the email, else the name, else "user"; digits added when taken). Rules: 3–30 of a-z 0-9 . _, not starting or ending with ".", no "..", not reserved. Set {{newUsername}} to the handle you want to try.'
+order: 4000

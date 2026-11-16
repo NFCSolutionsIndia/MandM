@@ -1,0 +1,34 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/auth/verify"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "email": "{{email}}",
+        "code": "{{code}}"
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "accessToken": "mJ3v1c6rG0yQx2b8T5nWkP4sLz9aHf7DdE1uVq0oRtA",
+        "accessExpiresAt": "2026-11-14T10:00:00.000Z",
+        "refreshToken": "Yk2pQ8wN5rT1zV7xB3mC9sD4fG6hJ0lA2eU8iO5yRqW",
+        "refreshExpiresAt": "2026-12-13T10:00:00.000Z",
+        "isNewAccount": true,
+        "user": {
+          "id": "019a7b3c-5d2e-7f10-8a4b-1c2d3e4f5a6b",
+          "username": "aarav.k",
+          "name": "aarav.k"
+        }
+      }
+order: 1000

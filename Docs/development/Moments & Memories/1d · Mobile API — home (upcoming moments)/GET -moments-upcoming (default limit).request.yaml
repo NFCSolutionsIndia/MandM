@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /moments/upcoming (default limit)
+description: "No limit: 5."
+url: "{{baseUrl}}/api/v1/moments/upcoming"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/GET -moments-upcoming (default limit).resources/examples
+order: 2000

@@ -1,0 +1,27 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/users/me/username"
+  method: PATCH
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "username": "{{newUsername}}2"
+      }
+response:
+  statusCode: 429
+  statusText: Too Many Requests
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 429,
+        "message": "You can change your username once every 14 days.",
+        "retryAfter": "2026-11-29T10:00:00.000Z"
+      }
+order: 1000

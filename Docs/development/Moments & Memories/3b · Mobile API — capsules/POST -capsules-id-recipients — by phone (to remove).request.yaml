@@ -1,0 +1,26 @@
+$kind: http-request
+name: POST /capsules/:id/recipients — by phone (to remove)
+description: |-
+  A recipient needs an email or a phone. preferredChannel is push, email, sms or whatsapp, and the matching field is required: sms and whatsapp need phone, email needs email.
+
+  Added here only to be removed by the next request.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/recipients"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "name": "Rohan",
+      "phone": "+919800000000",
+      "preferredChannel": "sms"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201',()=>pm.response.to.have.status(201));
+      pm.collectionVariables.set('extraRecipientId', pm.response.json().id);
+    language: text/javascript
+order: 5000

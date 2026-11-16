@@ -1,0 +1,14 @@
+$kind: http-request
+name: POST /open/:token/reply
+description: The reply the sender may never read. Goes through app_post_reply(), which refuses any capsule not delivered or opened.
+url: "{{baseUrl}}/api/v1/open/{{accessToken}}/reply"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "body": "I read it on the morning of my birthday. Thank you."
+    }
+order: 14000

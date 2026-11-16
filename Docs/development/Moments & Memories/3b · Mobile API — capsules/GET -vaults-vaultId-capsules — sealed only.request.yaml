@@ -1,0 +1,17 @@
+$kind: http-request
+name: GET /vaults/:vaultId/capsules — sealed only
+description: "state filters by one of: draft, sealed, delivering, delivered, opened, cancelled, failed."
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules?limit=50&state=sealed"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limit: "50"
+  state: sealed
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200',()=>pm.response.to.have.status(200));
+      pm.test('only sealed',()=>pm.response.json().capsules.forEach(x=>pm.expect(x.state).to.eql('sealed')));
+    language: text/javascript
+order: 11000

@@ -1,0 +1,33 @@
+$kind: http-request
+name: POST /vaults/:vaultId/memories
+description: |-
+  occurredAt is when it HAPPENED, not when it was uploaded — defaulting it to now is how a scanned 1974 photograph ends up filed under the Tuesday somebody digitised it.
+
+  occurredPrecision: exact | day | month | year | decade
+
+  clientId is the device's own id and makes a retry idempotent. {{$guid}} generates a fresh one; paste a fixed value instead to watch deduplicated flip to true.
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "Aaji at the wedding",
+      "note": "She wore the green sari.",
+      "occurredAt": "1974-03-14T00:00:00Z",
+      "occurredPrecision": "year",
+      "occasion": "wedding",
+      "clientId": "{{$guid}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const b = pm.response.json();
+      pm.collectionVariables.set('memoryId', b.id);
+      console.log('deduplicated:', b.deduplicated);
+    language: text/javascript
+order: 1000

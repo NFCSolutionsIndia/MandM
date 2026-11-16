@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /app-version/windows (expect 404)
+description: Only ios and android exist.
+url: "{{baseUrl}}/api/v1/app-version/windows?current=1.0.0"
+method: GET
+queryParams:
+  current: 1.0.0
+scripts:
+  - type: afterResponse
+    code: pm.test('404', () => pm.response.to.have.status(404));
+    language: text/javascript
+examples: ./.resources/GET -app-version-windows (expect 404).resources/examples
+order: 4000

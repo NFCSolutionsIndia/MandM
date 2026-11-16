@@ -1,0 +1,24 @@
+$kind: http-request
+name: POST /admin/v1/auth/verify-totp
+description: |-
+  Factor two. Note the Authorization header carries the mfaToken, not a session.
+
+  Set `totp` to the six digits from your authenticator. The admin session lasts 8 hours, not the 30 days a customer gets.
+url: "{{baseUrl}}/api/v1/admin/v1/auth/verify-totp"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{mfaToken}}
+body:
+  type: text
+  content: |-
+    {
+      "code": "{{totp}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.collectionVariables.set('adminToken', pm.response.json().token);
+    language: text/javascript
+order: 3000

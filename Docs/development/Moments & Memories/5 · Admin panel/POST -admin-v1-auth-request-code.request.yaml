@@ -1,0 +1,23 @@
+$kind: http-request
+name: POST /admin/v1/auth/request-code
+description: |-
+  Also always 202, so this cannot be used to enumerate staff.
+
+  The address must already exist in admin_users — there is no self-signup for staff, by design.
+url: "{{baseUrl}}/api/v1/admin/v1/auth/request-code"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{adminEmail}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('202', () => pm.response.to.have.status(202));
+      console.log('npm run dev:code -- ' + pm.collectionVariables.get('adminEmail'));
+    language: text/javascript
+order: 1000

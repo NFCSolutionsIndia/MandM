@@ -1,0 +1,11 @@
+$kind: http-request
+name: GET /open/:token — after delivery
+description: |-
+  Works once the worker has delivered the capsule. The token is the last path segment of the link in the delivery message; locally, the worker logs it as `[dev] ... link: <OPEN_LINK_BASE_URL>/<token>`. Copy that token into the accessToken collection variable.
+
+  Each delivery attempt mints a new token and revokes the previous one, so use the token from the latest log line.
+
+  Records the FIRST opening only — refresh and firstOpenedAt does not move.
+url: "{{baseUrl}}/api/v1/open/{{accessToken}}"
+method: GET
+order: 13000

@@ -1,0 +1,29 @@
+$kind: http-request
+name: GET /app-version/android?current=
+description: |-
+  Public — no Authorization header. The app calls this on launch with its own version.
+
+  • updateAvailable: current < latestVersion → show the "update available" banner.
+  • forceUpdate: current < minSupportedVersion → block the app and send the user to storeUrl.
+  • No ?current → the same data with both flags false.
+
+  Versions are x.y.z and compared as numbers: 1.10.0 is newer than 1.9.0. A current that is not x.y.z is 400; an unknown platform is 404.
+
+  Cache-Control: public, max-age=300 — a new minimum can take up to five minutes to reach every app.
+
+  Until an admin sets a value, both versions are 0.0.0 and neither flag ever fires.
+url: "{{baseUrl}}/api/v1/app-version/android?current={{appVersion}}"
+method: GET
+queryParams:
+  current: "{{appVersion}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('has both flags', () => { pm.expect(b.updateAvailable).to.be.a('boolean'); pm.expect(b.forceUpdate).to.be.a('boolean'); });
+      pm.test('cacheable for 5 minutes', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('public, max-age=300'));
+      console.log(b.platform, 'latest', b.latestVersion, 'min', b.minSupportedVersion, '| update:', b.updateAvailable, '| force:', b.forceUpdate);
+    language: text/javascript
+examples: ./.resources/GET -app-version-android-current=.resources/examples
+order: 2000

@@ -1,0 +1,26 @@
+$kind: http-request
+name: GET /moments/upcoming?limit=5
+description: |-
+  BE-06. The Home screen's next moments, soonest first; ties by type, then title. At most `limit` (default 5, max 20; outside that is 400).
+
+  • capsule — my sealed, undelivered capsules: the unlock date, or for a milestone capsule the day the person reaches the age.
+  • birthday / anniversary — the next one for each of my people (birthdays known only to the month or year are skipped), and my events of that type.
+  • event — my other events; yearly and monthly ones repeat.
+
+  source says what id points at: capsule, person (a member id) or event. Dates are calendar days in the user's timezone; 29 February is 28 February in common years. An empty account gets items: [].
+url: "{{baseUrl}}/api/v1/moments/upcoming?limit=5"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limit: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const items = pm.response.json().items;
+      pm.test('at most 5', () => pm.expect(items.length).to.be.at.most(5));
+      pm.test('soonest first', () => { for (let i = 1; i < items.length; i++) pm.expect(items[i].date >= items[i-1].date).to.be.true; });
+    language: text/javascript
+examples: ./.resources/GET -moments-upcoming-limit=5.resources/examples
+order: 1000

@@ -1,0 +1,6 @@
+$kind: http-request
+name: GET /health/ready
+description: "Readiness: this one touches the database. Use it to confirm the pool is actually up before blaming an endpoint."
+url: "{{baseUrl}}/health/ready"
+method: GET
+order: 2000

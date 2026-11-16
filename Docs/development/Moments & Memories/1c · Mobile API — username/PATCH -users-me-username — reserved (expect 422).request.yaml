@@ -1,0 +1,20 @@
+$kind: http-request
+name: PATCH /users/me/username — reserved (expect 422)
+description: "Reserved: 422."
+url: "{{baseUrl}}/api/v1/users/me/username"
+method: PATCH
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "username": "support"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('422', () => pm.response.to.have.status(422));
+    language: text/javascript
+examples: ./.resources/PATCH -users-me-username — reserved (expect 422).resources/examples
+order: 6000

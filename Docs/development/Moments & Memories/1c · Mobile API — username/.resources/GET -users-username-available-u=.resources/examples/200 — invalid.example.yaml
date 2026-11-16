@@ -1,0 +1,28 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+  queryParams:
+    u: "{{newUsername}}"
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "username": "a..b",
+        "available": false,
+        "reason": "invalid",
+        "message": "Username cannot contain ...",
+        "suggestions": [
+          "a.b1",
+          "a.b_",
+          "ab12"
+        ]
+      }
+order: 3000

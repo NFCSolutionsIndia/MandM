@@ -1,0 +1,14 @@
+$kind: http-request
+name: GET /vaults/:vaultId/memories
+description: "Keyset pagination, not offset: an offset shifts under you when somebody adds a memory mid-scroll, and this timeline is appended to constantly. Pass nextBefore back as `before`."
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories?limit=50"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  - key: limit
+    value: "50"
+  - key: before
+    value: ""
+    disabled: true
+order: 2000

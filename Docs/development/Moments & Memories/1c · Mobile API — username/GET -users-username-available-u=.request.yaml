@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /users/username-available?u=
+description: Case-insensitive. A malformed name is a 200 with reason "invalid", not an error — the edit screen calls this as the user types. reason is one of invalid | reserved | taken; your own current handle counts as available. Up to three free suggestions when unavailable.
+url: "{{baseUrl}}/api/v1/users/username-available?u={{newUsername}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  u: "{{newUsername}}"
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/GET -users-username-available-u=.resources/examples
+order: 2000

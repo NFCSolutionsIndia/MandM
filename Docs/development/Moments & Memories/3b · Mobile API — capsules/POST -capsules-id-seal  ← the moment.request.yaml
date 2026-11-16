@@ -1,0 +1,22 @@
+$kind: http-request
+name: POST /capsules/:id/seal  ← the moment
+description: |-
+  Seals the capsule AND schedules its delivery in ONE transaction. A capsule sealed without a job is a promise nothing will ever keep.
+
+  400 no recipients · 400 unlock time already passed · 409 already sealed · 403 not the owner
+
+  scheduled:false means it was sealed but has no date yet (milestone or manual).
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/seal"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200',()=>pm.response.to.have.status(200));
+      const b=pm.response.json();
+      pm.test('sealed',()=>pm.expect(b.state).to.eql('sealed'));
+      pm.test('delivery scheduled',()=>pm.expect(b.scheduled).to.be.true);
+      console.log('editable until', b.editableUntil);
+    language: text/javascript
+order: 7000

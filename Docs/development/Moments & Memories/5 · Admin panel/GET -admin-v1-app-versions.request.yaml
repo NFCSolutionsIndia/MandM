@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /admin/v1/app-versions
+description: Both platforms, for the console App versions page (ADM-01). updatedBy is null until somebody first edits a platform.
+url: "{{baseUrl}}/api/v1/admin/v1/app-versions"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('both platforms', () => pm.expect(pm.response.json()).to.have.length(2));
+    language: text/javascript
+examples: ./.resources/GET -admin-v1-app-versions.resources/examples
+order: 7000

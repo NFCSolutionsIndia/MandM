@@ -1,0 +1,11 @@
+$kind: http-request
+name: POST /capsules/:id/cancel
+description: |-
+  Withdraw the promise. Allowed after sealing, unlike editing: a promise you may silently rewrite is not a promise, but a person must always be able to stop something being sent.
+
+  The job is NOT deleted — the worker completes it without sending, keeping the record that something was scheduled and then withdrawn.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/cancel"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+order: 15000

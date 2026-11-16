@@ -1,0 +1,30 @@
+$kind: http-request
+name: POST /vaults/:vaultId/capsules
+description: |-
+  Creates a DRAFT. unlockAt is when it opens; unlockTimezone is the zone the sender meant, kept separately so a message for a daughter in Pune scheduled from London does not arrive at 03:00 her time.
+
+  unlockKind: datetime | milestone | manual
+
+  unlockKind is datetime (needs unlockAt), manual (sealed but never scheduled — released by hand), or milestone (needs milestoneMemberId, a members.id). No endpoint creates members yet, so milestone cannot be exercised from here.
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "For your eighteenth",
+      "note": "You were asleep on my shoulder when I wrote this.",
+      "unlockKind": "datetime",
+      "unlockAt": "2044-03-01T09:00:00Z",
+      "unlockTimezone": "Asia/Kolkata"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201',()=>pm.response.to.have.status(201));
+      pm.collectionVariables.set('capsuleId', pm.response.json().id);
+    language: text/javascript
+order: 1000

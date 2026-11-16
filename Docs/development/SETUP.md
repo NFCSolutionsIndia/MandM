@@ -1789,6 +1789,7 @@ asserting the version nibble on every id those functions create.
 | `GET  /api/v1/users/me` | the account, with `username` and `usernameChangeableAt` (null = may change now) |
 | `GET  /api/v1/users/username-available?u=` | case-insensitive; `reason` = `invalid` · `reserved` · `taken`, plus up to three free `suggestions`. A malformed name is a 200, not an error |
 | `PATCH /api/v1/users/me/username` | D-5: once every `USERNAME_CHANGE_DAYS`. 409 taken · 422 invalid or reserved · 429 too soon (`retryAfter`). Audit-logged |
+| `GET  /api/v1/moments/upcoming?limit=5` | Home (BE-06): my sealed capsules, my people's next birthdays and anniversaries, my events, soonest first. Days counted in the user's timezone; limit 1–20 |
 | `GET  /api/v1/vaults` · `POST /api/v1/vaults` | the first product endpoints |
 | `GET  /api/v1/app-version/:platform?current=x.y.z` | public, `ios` or `android`. `updateAvailable` (current < latest) and `forceUpdate` (current < minimum), compared numerically. Cached 5 minutes |
 | `GET  /api/v1/admin/v1/app-versions` · `PUT …/:platform` | console only. A PUT is audit-logged with old and new values; 422 for a non-x.y.z version or a minimum above the latest |

@@ -1,0 +1,38 @@
+$kind: http-request
+name: POST /auth/verify
+description: |-
+  Set the `code` variable first.
+
+  One flat 401 for every failure — wrong code, expired code, too many attempts, no code at all. Distinguishing them would tell an attacker which part of the guess was right.
+
+  BREAKING (0029502): the response is now a PAIR of tokens instead of one `token`:
+    • accessToken  — send as `Authorization: Bearer` on every request. Lives ACCESS_TOKEN_HOURS (24 h).
+    • refreshToken — send ONLY to POST /auth/refresh. Lives REFRESH_TOKEN_DAYS (30 days), renewed on every refresh.
+  A session with no request and no refresh for SESSION_IDLE_DAYS (7) is over for both.
+
+  Both raw tokens exist only in this response and in your client; the database keeps their SHA-256 and nothing else. This script captures them into {{token}} and {{refreshToken}}.
+url: "{{baseUrl}}/api/v1/auth/verify"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{email}}",
+      "code": "{{code}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('returned an access token', () => pm.expect(b.accessToken).to.be.a('string'));
+      pm.test('returned a refresh token', () => pm.expect(b.refreshToken).to.be.a('string'));
+      pm.collectionVariables.set('token', b.accessToken);
+      pm.collectionVariables.set('refreshToken', b.refreshToken);
+      pm.collectionVariables.set('previousRefreshToken', '');
+      console.log('isNewAccount:', b.isNewAccount, '| user:', b.user && b.user.username, '| access until', b.accessExpiresAt, '| refresh until', b.refreshExpiresAt);
+    language: text/javascript
+examples: ./.resources/POST -auth-verify.resources/examples
+order: 2000
