@@ -1,0 +1,26 @@
+$kind: http-request
+name: POST /uploads/:uploadId/complete
+description: |-
+  The server HEADs the object and records the size IT reports, not the one you declared.
+
+  409 means the object is not in the bucket — you skipped the PUT, or it failed.
+  413 means the object is bigger than the upload was opened for.
+url: "{{baseUrl}}/api/v1/uploads/{{uploadId}}/complete"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "kind": "image",
+      "contentType": "image/jpeg"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.collectionVariables.set('assetId', pm.response.json().assetId);
+    language: text/javascript
+order: 6000

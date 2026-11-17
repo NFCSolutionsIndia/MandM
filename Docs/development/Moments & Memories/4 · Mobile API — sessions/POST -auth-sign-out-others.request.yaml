@@ -1,0 +1,8 @@
+$kind: http-request
+name: POST /auth/sign-out-others
+description: Revokes every session except the one making the request. Run this BEFORE sign-out, or you will have nothing left to call it with.
+url: "{{baseUrl}}/api/v1/auth/sign-out-others"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+order: 1000

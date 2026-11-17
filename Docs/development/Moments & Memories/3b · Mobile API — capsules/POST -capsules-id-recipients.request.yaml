@@ -1,0 +1,30 @@
+$kind: http-request
+name: POST /capsules/:id/recipients
+description: |-
+  Returns only the recipient's id. No credential is handed out — not even to the sender.
+
+  The token that opens the capsule is minted by the worker at delivery and travels only in the message that delivers it. A sender holding one could open the capsule first and become "the first opening".
+
+  To try the /open requests locally: run the worker (npm run worker:dev), let it deliver, and paste the token from its `[dev] ... link:` log line into the accessToken collection variable.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/recipients"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "name": "Aarti",
+      "email": "aarti@example.com",
+      "preferredChannel": "email"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201',()=>pm.response.to.have.status(201));
+      const b=pm.response.json();
+      pm.collectionVariables.set('recipientId', b.id);
+      pm.test('no credential for the sender',()=>pm.expect(b).to.not.have.property('accessToken'));
+    language: text/javascript
+order: 2000

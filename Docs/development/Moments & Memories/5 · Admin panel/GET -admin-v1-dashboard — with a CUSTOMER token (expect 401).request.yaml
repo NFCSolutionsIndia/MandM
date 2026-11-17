@@ -1,0 +1,12 @@
+$kind: http-request
+name: GET /admin/v1/dashboard — with a CUSTOMER token (expect 401)
+description: The realms do not share credentials. A customer session must never open a staff door, and this proves it.
+url: "{{baseUrl}}/api/v1/admin/v1/dashboard"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('rejected', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));
+    language: text/javascript
+order: 6000

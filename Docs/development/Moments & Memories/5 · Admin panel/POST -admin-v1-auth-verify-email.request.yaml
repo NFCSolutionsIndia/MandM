@@ -1,0 +1,29 @@
+$kind: http-request
+name: POST /admin/v1/auth/verify-email
+description: |-
+  Factor one. The mfaToken it returns can do exactly ONE thing — present a TOTP code. It reaches no other admin route.
+
+  On a first sign-in the response also carries `enrolment`, containing the TOTP secret and otpauth URI. It is shown once and is never recoverable: re-enrolment is refused once a secret exists, because otherwise anybody holding a first-factor token could replace the second factor with one of their own.
+url: "{{baseUrl}}/api/v1/admin/v1/auth/verify-email"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{adminEmail}}",
+      "code": "{{code}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.collectionVariables.set('mfaToken', b.mfaToken);
+      if (b.enrolment) {
+        console.log('ENROL NOW — shown once:', JSON.stringify(b.enrolment));
+        console.log('Add the otpauth URI to your authenticator app.');
+      }
+    language: text/javascript
+order: 2000

@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  BE-05. The force-update check, separately for iOS and Android. Public: an app too old to sign in still has to be told to update.
+
+  Set {{appVersion}} to the build you want to pretend to be. The values themselves are set in the Admin panel folder (PUT /admin/v1/app-versions/:platform).
+order: 3000

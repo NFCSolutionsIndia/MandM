@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /users/me
+description: "The signed-in user, with username. usernameChangeableAt is null when the user may choose a new handle now, else when they next may (D-5: once every USERNAME_CHANGE_DAYS, default 14)."
+url: "{{baseUrl}}/api/v1/users/me"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('has username', () => pm.expect(pm.response.json().username).to.be.a('string'));
+    language: text/javascript
+examples: ./.resources/GET -users-me.resources/examples
+order: 1000

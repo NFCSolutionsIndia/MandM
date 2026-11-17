@@ -1,0 +1,15 @@
+$kind: http-request
+name: "GET /members?q=aar"
+description: "Sorted by name. q matches anywhere in the name, case-insensitively. Pass nextCursor back as ?cursor= for the next page; null means the last page. limit 1–100, default 20."
+url: "{{baseUrl}}/api/v1/members?q=aar&limit=20"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('has items', () => pm.expect(pm.response.json().items).to.be.an('array'));
+    language: text/javascript
+examples: ./.resources/GET -members-q=aar.resources/examples
+order: 3000

@@ -1,0 +1,17 @@
+$kind: http-request
+description: |-
+  Body → binary → select your file. It must be the SAME file whose size you declared, or R2 refuses the signature.
+
+  Note there is no Authorization header: the signature in the URL is the credential, which is the whole reason this can go straight to Cloudflare.
+url: "{{uploadUrl}}"
+method: PUT
+headers:
+  Content-Type: image/jpeg
+body:
+  type: file
+  content: {}
+scripts:
+  - type: afterResponse
+    code: pm.test('200 from R2', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 5000

@@ -1,0 +1,27 @@
+$kind: http-example
+name: "401 — expired, idle, revoked or reused: sign out"
+request:
+  url: "{{baseUrl}}/api/v1/auth/refresh"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "refreshToken": "{{refreshToken}}"
+      }
+response:
+  statusCode: 401
+  statusText: Unauthorized
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 401,
+        "message": "Session expired. Sign in again.",
+        "error": "Unauthorized"
+      }
+order: 2000

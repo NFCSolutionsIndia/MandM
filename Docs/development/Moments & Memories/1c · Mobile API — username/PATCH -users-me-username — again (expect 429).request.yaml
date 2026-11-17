@@ -1,0 +1,20 @@
+$kind: http-request
+name: PATCH /users/me/username — again (expect 429)
+description: "Straight after a change: 429 until the cooldown ends."
+url: "{{baseUrl}}/api/v1/users/me/username"
+method: PATCH
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "username": "{{newUsername}}2"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('429', () => pm.response.to.have.status(429));
+    language: text/javascript
+examples: ./.resources/PATCH -users-me-username — again (expect 429).resources/examples
+order: 5000

@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /app-version/ios — no current (both flags false)
+description: "Without ?current: the data, with updateAvailable and forceUpdate both false."
+url: "{{baseUrl}}/api/v1/app-version/ios"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('no verdict without a version', () => { const b = pm.response.json(); pm.expect(b.updateAvailable).to.eql(false); pm.expect(b.forceUpdate).to.eql(false); });
+    language: text/javascript
+examples: ./.resources/GET -app-version-ios — no current (both flags false).resources/examples
+order: 3000

@@ -1,0 +1,26 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/moments/upcoming?limit=5"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+  queryParams:
+    limit: "5"
+response:
+  statusCode: 400
+  statusText: Bad Request
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "message": "Validation failed",
+        "errors": [
+          {
+            "field": "limit",
+            "message": "Too big: expected number to be <=20"
+          }
+        ]
+      }
+order: 3000

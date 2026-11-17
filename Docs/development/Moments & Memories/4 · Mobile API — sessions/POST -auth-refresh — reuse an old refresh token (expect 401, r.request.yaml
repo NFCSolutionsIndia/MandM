@@ -1,0 +1,22 @@
+$kind: http-request
+name: POST /auth/refresh — reuse an old refresh token (expect 401, revokes the session)
+description: |-
+  Presents the refresh token that POST /auth/refresh already exchanged. Expect 401 — and the session it belonged to is now revoked, so {{token}} and {{refreshToken}} stop working too.
+
+  Run POST /auth/refresh at least once first, or {{previousRefreshToken}} is empty. Run this LAST: it signs you out. Sign in again from folder 1 to continue.
+url: "{{baseUrl}}/api/v1/auth/refresh"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "refreshToken": "{{previousRefreshToken}}"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('401', () => pm.response.to.have.status(401));
+    language: text/javascript
+examples: ./.resources/POST -auth-refresh — reuse an old refresh token (expect 401, r.resources/examples
+order: 3000

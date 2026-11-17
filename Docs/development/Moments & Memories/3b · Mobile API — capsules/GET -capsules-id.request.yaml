@@ -1,0 +1,8 @@
+$kind: http-request
+name: GET /capsules/:id
+description: The capsule with its recipients and memories. The access token is NOT here, in any form.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+order: 9000

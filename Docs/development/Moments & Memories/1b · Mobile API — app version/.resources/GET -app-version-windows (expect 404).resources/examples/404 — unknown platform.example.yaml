@@ -1,0 +1,20 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/app-version/windows?current=1.0.0"
+  method: GET
+  queryParams:
+    current: 1.0.0
+response:
+  statusCode: 404
+  statusText: Not Found
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 404,
+        "message": "Unknown platform.",
+        "error": "Not Found"
+      }
+order: 1000

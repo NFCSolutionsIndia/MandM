@@ -1,0 +1,12 @@
+$kind: http-request
+name: GET /auth/me
+description: "The first endpoint that needs an actor. If this works, the whole chain works: bearer token → app_resolve_session → ActorContext → SET LOCAL app.user_id → sixty row-level policies."
+url: "{{baseUrl}}/api/v1/auth/me"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 4000

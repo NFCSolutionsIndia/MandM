@@ -1,0 +1,21 @@
+$kind: http-request
+name: PUT /admin/v1/app-versions/ios — minimum above latest (expect 422)
+description: A minimum newer than the latest is refused, and nothing changes.
+url: "{{baseUrl}}/api/v1/admin/v1/app-versions/ios"
+method: PUT
+headers:
+  Authorization: Bearer {{adminToken}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "latestVersion": "1.4.0",
+      "minSupportedVersion": "2.0.0"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('422', () => pm.response.to.have.status(422));
+    language: text/javascript
+examples: ./.resources/PUT -admin-v1-app-versions-ios — minimum above latest (expect.resources/examples
+order: 9000

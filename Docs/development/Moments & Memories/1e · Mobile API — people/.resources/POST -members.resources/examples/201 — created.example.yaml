@@ -1,0 +1,62 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/members"
+  method: POST
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "name": "Aarav",
+        "relationship": "son",
+        "birthday": "2012-05-04",
+        "birthdayPrecision": "day",
+        "anniversary": null,
+        "phone": "+919876543210",
+        "email": "aarav@example.com",
+        "notes": "Loves cricket",
+        "avatarMediaId": null
+      }
+response:
+  statusCode: 201
+  statusText: Created
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "id": "019a8c10-0000-7000-8000-00000000a001",
+        "name": "Aarav",
+        "relationship": "son",
+        "relationshipLabel": null,
+        "birthday": "2012-05-04",
+        "birthdayPrecision": "day",
+        "anniversary": null,
+        "phone": "+919876543210",
+        "email": "aarav@example.com",
+        "notes": "Loves cricket",
+        "avatarMediaId": null,
+        "avatarUrl": null,
+        "deceasedAt": null,
+        "mergedIntoId": null,
+        "createdAt": "2026-11-16T10:00:00.000Z",
+        "updatedAt": "2026-11-16T10:00:00.000Z",
+        "occasions": {
+          "birthday": {
+            "date": "2027-05-04",
+            "daysLeft": 169,
+            "turns": 15
+          },
+          "anniversary": null,
+          "events": []
+        },
+        "capsules": {
+          "milestone": 0,
+          "pendingDeliveries": 0,
+          "delivered": 0
+        }
+      }
+order: 1000

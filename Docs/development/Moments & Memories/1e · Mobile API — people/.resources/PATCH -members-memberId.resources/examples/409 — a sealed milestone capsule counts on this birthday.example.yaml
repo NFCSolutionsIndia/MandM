@@ -1,0 +1,31 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/members/{{memberId}}"
+  method: PATCH
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "notes": "Plays the tabla too",
+        "relationship": "son"
+      }
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 409,
+        "reason": "member_has_capsules",
+        "message": "A sealed milestone capsule counts on this birthday, so it cannot be changed or removed.",
+        "capsuleIds": [
+          "019a8c10-0000-7000-8000-00000000c001"
+        ]
+      }
+order: 2000

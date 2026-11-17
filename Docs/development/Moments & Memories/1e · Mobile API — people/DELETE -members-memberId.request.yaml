@@ -1,0 +1,14 @@
+$kind: http-request
+name: "DELETE /members/{{memberId}}"
+description: "204. 409 while a milestone capsule or a pending delivery depends on the person, listing those capsules."
+url: "{{baseUrl}}/api/v1/members/{{memberId}}"
+method: DELETE
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('204 or 409', () => pm.expect(pm.response.code).to.be.oneOf([204, 409]));
+    language: text/javascript
+examples: ./.resources/DELETE -members-memberId.resources/examples
+order: 6000

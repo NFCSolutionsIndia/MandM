@@ -1,0 +1,7 @@
+$kind: http-request
+name: GET /vaults
+url: "{{baseUrl}}/api/v1/vaults"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+order: 2000

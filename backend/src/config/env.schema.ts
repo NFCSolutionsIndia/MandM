@@ -193,6 +193,13 @@ export const envSchema = z.object({
    */
   SESSION_IDLE_DAYS: z.coerce.number().int().positive().max(365).default(7),
 
+  /**
+   * How often a user may choose a new username (decision D-5: at most once
+   * every 14 days). The auto-generated handle does not count as a choice,
+   * so the first change is always allowed.
+   */
+  USERNAME_CHANGE_DAYS: z.coerce.number().int().min(0).max(365).default(14),
+
   // ─── Email ─────────────────────────────────────────────────────────────
 
   /**

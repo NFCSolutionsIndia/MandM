@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /vaults/:vaultId/capsules
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/capsules?limit=50"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  - key: limit
+    value: "50"
+  - key: state
+    value: sealed
+    disabled: true
+order: 10000

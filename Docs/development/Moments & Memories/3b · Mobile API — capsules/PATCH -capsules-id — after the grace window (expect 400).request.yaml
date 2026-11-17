@@ -1,0 +1,18 @@
+$kind: http-request
+name: PATCH /capsules/:id — after the grace window (expect 400)
+description: |-
+  Inside the 15-minute grace window this succeeds. After it, capsule_freeze() raises 23514 and you get 400.
+
+  The freeze is a database trigger, not a check in the handler — it holds for every writer, including an admin tool or a migration script.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "note": "Actually, I changed my mind about all of it."
+    }
+order: 8000

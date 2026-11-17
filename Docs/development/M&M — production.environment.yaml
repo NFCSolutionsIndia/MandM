@@ -1,0 +1,8 @@
+name: M&M — production
+values:
+  - key: baseUrl
+    value: 'https://api.72-61-173-62.sslip.io'
+  - key: email
+    value: you@example.com
+  - key: adminEmail
+    value: admin@example.com

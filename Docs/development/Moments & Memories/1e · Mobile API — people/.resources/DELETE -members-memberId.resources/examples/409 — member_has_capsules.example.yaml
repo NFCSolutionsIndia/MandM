@@ -1,0 +1,23 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/members/{{memberId}}"
+  method: DELETE
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 409,
+        "reason": "member_has_capsules",
+        "message": "Capsules depend on this person. Cancel or deliver them first.",
+        "capsuleIds": [
+          "019a8c10-0000-7000-8000-00000000c001"
+        ]
+      }
+order: 2000

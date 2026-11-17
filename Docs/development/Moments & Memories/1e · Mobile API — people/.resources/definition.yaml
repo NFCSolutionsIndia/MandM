@@ -1,0 +1,3 @@
+$kind: collection
+description: "BE-04. The people a user keeps track of. Owner-only: the owner is the session's user, never a field of the request, and somebody else's person is 404.\n\nrelationship: mother, father, son, daughter, spouse, partner, brother, sister, grandparent, grandchild, friend, other. Free text goes in relationshipLabel, only with \"other\".\nbirthdayPrecision: exact | day | month | year (default day). A milestone capsule needs a birthday known to the DAY: otherwise 422 at create and at seal.\nDELETE is 409 { reason: \"member_has_capsules\", capsuleIds } while a milestone capsule, or a sealed capsule still to be delivered to them, depends on the person.\n\nRun \"POST /members\" first: it saves {{memberId}}."
+order: 5400

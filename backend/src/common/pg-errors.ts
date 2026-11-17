@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 
 /** The PostgreSQL error hiding under a Drizzle wrapper. */
-function sqlstate(error: unknown): string | undefined {
+export function sqlstate(error: unknown): string | undefined {
   return (error as { cause?: { code?: string }; code?: string }).cause?.code
     ?? (error as { code?: string }).code;
 }

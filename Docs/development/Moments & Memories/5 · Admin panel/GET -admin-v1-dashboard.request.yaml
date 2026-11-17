@@ -1,0 +1,11 @@
+$kind: http-request
+name: GET /admin/v1/dashboard
+description: |-
+  Everything the console's home screen draws. Run `npm run seed:dev` first or the numbers are all zero.
+
+  Worth noticing what is NOT here: no capsule contents. The console connects as mm_admin, which has a column-level grant letting it count capsules and read unlock_at, but no SELECT on sender_note at all. Operations can see that a capsule exists without reading what somebody wrote to their daughter.
+url: "{{baseUrl}}/api/v1/admin/v1/dashboard"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+order: 5000

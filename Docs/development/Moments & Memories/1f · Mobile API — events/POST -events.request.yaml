@@ -1,0 +1,28 @@
+$kind: http-request
+name: "POST /events"
+description: "201. Defaults: type custom, recurrence none, allDay true. Saves {{eventId}}."
+url: "{{baseUrl}}/api/v1/events"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "title": "Parents’ wedding",
+      "type": "anniversary",
+      "eventDate": "1988-12-01",
+      "recurrence": "yearly",
+      "memberIds": [
+        "{{memberId}}"
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('eventId', pm.response.json().id);
+    language: text/javascript
+examples: ./.resources/POST -events.resources/examples
+order: 1000

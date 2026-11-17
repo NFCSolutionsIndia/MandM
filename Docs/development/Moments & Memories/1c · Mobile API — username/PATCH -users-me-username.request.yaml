@@ -1,0 +1,20 @@
+$kind: http-request
+name: PATCH /users/me/username
+description: 200 | 409 taken (with suggestions) | 422 invalid or reserved | 429 changed too recently (retryAfter says when). The same handle again is a 200 with changed:false and does not start the cooldown. Every change is audit-logged (user.username_changed).
+url: "{{baseUrl}}/api/v1/users/me/username"
+method: PATCH
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "username": "{{newUsername}}"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/PATCH -users-me-username.resources/examples
+order: 4000

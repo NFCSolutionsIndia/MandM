@@ -1,0 +1,79 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/moments/upcoming"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "items": [
+          {
+            "type": "capsule",
+            "id": "019a7b3c-0000-7000-8000-0000000000c1",
+            "source": "capsule",
+            "title": "Open on Thursday",
+            "date": "2026-11-19",
+            "daysLeft": 3,
+            "person": null
+          },
+          {
+            "type": "birthday",
+            "id": "019a7b3c-0000-7000-8000-0000000000a1",
+            "source": "person",
+            "title": "Mom's birthday",
+            "date": "2026-11-23",
+            "daysLeft": 7,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-0000000000a1",
+              "name": "Mom",
+              "avatarUrl": "https://…signed…",
+              "deceased": false
+            }
+          },
+          {
+            "type": "event",
+            "id": "019a7b3c-0000-7000-8000-0000000000e1",
+            "source": "event",
+            "title": "Housewarming",
+            "date": "2026-11-26",
+            "daysLeft": 10,
+            "person": null
+          },
+          {
+            "type": "birthday",
+            "id": "019a7b3c-0000-7000-8000-0000000000a2",
+            "source": "person",
+            "title": "Ravi's birthday",
+            "date": "2026-12-26",
+            "daysLeft": 40,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-0000000000a2",
+              "name": "Ravi",
+              "avatarUrl": null,
+              "deceased": false
+            }
+          },
+          {
+            "type": "capsule",
+            "id": "019a7b3c-0000-7000-8000-0000000000c2",
+            "source": "capsule",
+            "title": "For Aarav at 18",
+            "date": "2030-05-04",
+            "daysLeft": 1265,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-0000000000a3",
+              "name": "Aarav",
+              "avatarUrl": null,
+              "deceased": false
+            }
+          }
+        ]
+      }
+order: 1000

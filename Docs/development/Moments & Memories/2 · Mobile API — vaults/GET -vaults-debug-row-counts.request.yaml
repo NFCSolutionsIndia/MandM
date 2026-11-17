@@ -1,0 +1,8 @@
+$kind: http-request
+name: GET /vaults/debug/row-counts
+description: "Proof that the boundary belongs to the database rather than to a handler: the counts are what THIS actor can see, not what the tables hold."
+url: "{{baseUrl}}/api/v1/vaults/debug/row-counts"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+order: 3000

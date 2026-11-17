@@ -1,0 +1,20 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/moments/upcoming?limit=5"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+  queryParams:
+    limit: "5"
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "items": []
+      }
+order: 2000

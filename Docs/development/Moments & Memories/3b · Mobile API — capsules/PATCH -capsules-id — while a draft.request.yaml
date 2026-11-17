@@ -1,0 +1,25 @@
+$kind: http-request
+name: PATCH /capsules/:id — while a draft
+description: |-
+  A draft is freely editable: title, note, unlockAt, unlockTimezone. Send only what changes; null clears title, note or unlockTimezone.
+
+  After the seal, the same request works only inside the 15-minute grace window (see the request after the seal).
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "For your eighteenth birthday",
+      "note": "You were asleep on my shoulder when I wrote this. You still are, as I edit it."
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200',()=>pm.response.to.have.status(200));
+      pm.test('still a draft',()=>pm.expect(pm.response.json().state).to.eql('draft'));
+    language: text/javascript
+order: 4000

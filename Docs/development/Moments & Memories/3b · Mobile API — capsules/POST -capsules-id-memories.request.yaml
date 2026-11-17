@@ -1,0 +1,17 @@
+$kind: http-request
+name: POST /capsules/:id/memories
+description: Idempotent — the primary key makes a retry a no-op. Send twice and watch added drop to 0 while total stays the same.
+url: "{{baseUrl}}/api/v1/capsules/{{capsuleId}}/memories"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{token}}
+body:
+  type: text
+  content: |-
+    {
+      "memoryIds": [
+        "{{memoryId}}"
+      ]
+    }
+order: 3000

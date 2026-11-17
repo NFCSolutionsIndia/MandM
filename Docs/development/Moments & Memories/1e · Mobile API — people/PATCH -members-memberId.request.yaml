@@ -1,0 +1,22 @@
+$kind: http-request
+name: "PATCH /members/{{memberId}}"
+description: "Any subset of fields; null clears one. A birthday a SEALED milestone capsule counts on cannot be moved or made vague: 409."
+url: "{{baseUrl}}/api/v1/members/{{memberId}}"
+method: PATCH
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "notes": "Plays the tabla too",
+      "relationship": "son"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/PATCH -members-memberId.resources/examples
+order: 5000

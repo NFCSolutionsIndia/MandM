@@ -1,0 +1,36 @@
+$kind: http-request
+name: POST /auth/refresh
+description: |-
+  Public — the access token has usually expired by now, which is the point. The refresh token in the body is the credential.
+
+  Returns a NEW access token AND a NEW refresh token, same shape as /auth/verify without isNewAccount. The refresh token you sent stops working immediately, and so does the old access token.
+
+  401 for every failure: refresh token expired, session idle over 7 days, revoked (signed out), unknown — or REUSED. A refresh token presented a second time is treated as stolen and the whole session is revoked.
+
+  Client rule: on a 401 from any endpoint, call this ONCE and retry the request. If this also returns 401, sign out. Refresh single-flight: two parallel refreshes with the same token look exactly like a reuse and end the session.
+
+  This script stores the new pair into {{token}} and {{refreshToken}}, and keeps the one it replaced in {{previousRefreshToken}} for the reuse example in folder 4.
+url: "{{baseUrl}}/api/v1/auth/refresh"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "refreshToken": "{{refreshToken}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 OK', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('returned a new pair', () => { pm.expect(b.accessToken).to.be.a('string'); pm.expect(b.refreshToken).to.be.a('string'); });
+      pm.test('rotated the refresh token', () => pm.expect(b.refreshToken).to.not.eql(pm.collectionVariables.get('refreshToken')));
+      pm.collectionVariables.set('previousRefreshToken', pm.collectionVariables.get('refreshToken'));
+      pm.collectionVariables.set('token', b.accessToken);
+      pm.collectionVariables.set('refreshToken', b.refreshToken);
+      console.log('access until', b.accessExpiresAt, '| refresh until', b.refreshExpiresAt);
+    language: text/javascript
+examples: ./.resources/POST -auth-refresh.resources/examples
+order: 5000

@@ -1,0 +1,31 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/users/me/username"
+  method: PATCH
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "username": "{{newUsername}}"
+      }
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "statusCode": 409,
+        "message": "That username is taken.",
+        "suggestions": [
+          "aarav.k1",
+          "aarav.k_",
+          "aaravk"
+        ]
+      }
+order: 2000

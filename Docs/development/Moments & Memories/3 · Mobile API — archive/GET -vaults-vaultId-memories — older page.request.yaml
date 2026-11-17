@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /vaults/:vaultId/memories — older page
+description: "Paging. `before` is an occurredAt instant: pass the oldest occurredAt from the previous page to get the page after it. The example returns the 1974 memory created above."
+url: "{{baseUrl}}/api/v1/vaults/{{vaultId}}/memories?limit=50&before=1980-01-01T00:00:00Z"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limit: "50"
+  before: 1980-01-01T00:00:00Z
+scripts:
+  - type: afterResponse
+    code: pm.test('200',()=>pm.response.to.have.status(200));
+    language: text/javascript
+order: 3000

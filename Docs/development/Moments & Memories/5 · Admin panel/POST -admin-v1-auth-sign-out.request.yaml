@@ -1,0 +1,7 @@
+$kind: http-request
+name: POST /admin/v1/auth/sign-out
+url: "{{baseUrl}}/api/v1/admin/v1/auth/sign-out"
+method: POST
+headers:
+  Authorization: Bearer {{adminToken}}
+order: 10000

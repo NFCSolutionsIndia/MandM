@@ -1,0 +1,9 @@
+$kind: http-request
+name: GET /open/:token — before delivery (expect 404)
+description: |-
+  NO Authorization header — that is the point. The recipient may have been eleven when this was written and may have no account.
+
+  Before delivery this is 404. A wrong token is the same flat 404, so a bad token learns nothing.
+url: "{{baseUrl}}/api/v1/open/{{accessToken}}"
+method: GET
+order: 12000

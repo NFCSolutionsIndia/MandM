@@ -1,0 +1,8 @@
+name: M&M — local
+values:
+  - key: baseUrl
+    value: 'http://127.0.0.1:3000'
+  - key: email
+    value: you@example.com
+  - key: adminEmail
+    value: admin@example.com

@@ -1,0 +1,38 @@
+$kind: collection
+description: |-
+  Every endpoint the product exposes, in the order you would exercise them.
+
+  Three realms, and they do not share credentials:
+    • Mobile API  — /api/v1/*        Bearer {{token}}        (a customer — the ACCESS token; {{refreshToken}} goes only to /auth/refresh)
+    • Admin panel — /admin/v1/*      Bearer {{adminToken}}   (staff, 2FA)
+    • Health      — /health          no auth
+
+  Pick an environment: "M&M — local" (http://127.0.0.1:3000) or "M&M — production" (https://api.72-61-173-62.sslip.io). In production the Admin panel folder answers 404 by design — nginx serves /api/v1/admin/ to nobody outside the server — and GET /vaults/debug/row-counts answers 404 too.
+
+  Tokens are captured automatically by the Tests script on each sign-in request, so run them top to bottom and nothing needs copying by hand.
+
+  Sign-in codes are SHA-256 in the database and cannot be read back. Either take the code from the inbox, or run:  npm run dev:code -- <email>
+variables:
+  baseUrl: http://127.0.0.1:3000
+  email: you@example.com
+  adminEmail: admin@example.com
+  code: ""
+  totp: ""
+  token: ""
+  refreshToken: ""
+  previousRefreshToken: ""
+  adminToken: ""
+  mfaToken: ""
+  vaultId: ""
+  memoryId: ""
+  uploadId: ""
+  assetId: ""
+  uploadUrl: ""
+  capsuleId: ""
+  recipientId: ""
+  accessToken: ""
+  extraRecipientId: ""
+  appVersion: 1.2.0
+  newUsername: aarav.k
+  memberId: ""
+  eventId: ""
