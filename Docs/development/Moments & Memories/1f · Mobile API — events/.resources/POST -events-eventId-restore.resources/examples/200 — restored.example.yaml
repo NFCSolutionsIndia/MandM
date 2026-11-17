@@ -1,0 +1,35 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/events/{{eventId}}/restore"
+  method: POST
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "id": "019a8c10-0000-7000-8000-00000000e002",
+        "title": "Parents’ wedding",
+        "type": "anniversary",
+        "eventDate": "1988-12-01",
+        "recurrence": "yearly",
+        "allDay": true,
+        "notes": null,
+        "nextOccurrence": "2026-12-01",
+        "daysLeft": 15,
+        "members": [
+          {
+            "id": "019a8c10-0000-7000-8000-00000000a003",
+            "name": "Mom"
+          }
+        ],
+        "archivedAt": null,
+        "createdAt": "2026-11-16T10:00:00.000Z",
+        "updatedAt": "2026-11-16T10:00:00.000Z"
+      }
+order: 1000

@@ -1,0 +1,14 @@
+$kind: http-request
+name: "GET /events"
+description: "Sorted by eventDate. Filters: ?type=, ?memberId=, ?q= (title), ?archived=true for archived ones. Cursor paging like /members."
+url: "{{baseUrl}}/api/v1/events?limit=20"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/GET -events.resources/examples
+order: 2000

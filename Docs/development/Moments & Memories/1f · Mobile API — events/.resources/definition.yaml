@@ -1,0 +1,3 @@
+$kind: collection
+description: "Occasions a user marks: type birthday | anniversary | festival | custom, recurrence none | yearly | monthly. eventDate is the first occurrence; every response has nextOccurrence and daysLeft in the user's timezone (null for a one-off in the past).\n\nmemberIds: the people it is about — your own people only (422 otherwise); PATCH replaces the list. DELETE archives; POST /events/:id/restore undoes it. Owner-only: somebody else's event is 404.\n\nRun \"POST /events\" first: it saves {{eventId}}."
+order: 5700

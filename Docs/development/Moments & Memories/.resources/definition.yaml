@@ -34,3 +34,5 @@ variables:
   extraRecipientId: ""
   appVersion: 1.2.0
   newUsername: aarav.k
+  memberId: ""
+  eventId: ""

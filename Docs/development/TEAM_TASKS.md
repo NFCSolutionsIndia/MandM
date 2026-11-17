@@ -412,15 +412,15 @@ No migration expected. If one is needed, it takes the next free slot.
 
 ---
 
-### Backend — Omsai
+### Backend — Akshara peraka
 
 ---
 
 #### BE-04 · People (members) API ← the main feature in this round
 
-| Summary                                                    | Assign To | Priority | Estimate | Tags                      |
-| ---------------------------------------------------------- | --------- | -------- | -------- | ------------------------- |
-| `[BE-04] People (members) API: create, list, edit, delete` | Omsai     | High     | 14:00    | `backend,people,capsules` |
+| Summary                                                    | Assign To      | Priority | Estimate | Tags                      |
+| ---------------------------------------------------------- | -------------- | -------- | -------- | ------------------------- |
+| `[BE-04] People (members) API: create, list, edit, delete` | Akshara peraka | High     | 14:00    | `backend,people,capsules` |
 
 **Description**
 

@@ -1,0 +1,23 @@
+$kind: http-request
+name: "POST /members — other, with a label"
+description: "Free text is allowed only with relationship \"other\"."
+url: "{{baseUrl}}/api/v1/members"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "name": "Kavya",
+      "relationship": "other",
+      "relationshipLabel": "school friend"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+    language: text/javascript
+examples: ./.resources/POST -members — other, with a label.resources/examples
+order: 2000

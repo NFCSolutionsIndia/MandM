@@ -1,0 +1,39 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/members"
+  method: POST
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "name": "Aarav",
+        "relationship": "son",
+        "birthday": "2012-05-04",
+        "birthdayPrecision": "day",
+        "anniversary": null,
+        "phone": "+919876543210",
+        "email": "aarav@example.com",
+        "notes": "Loves cricket",
+        "avatarMediaId": null
+      }
+response:
+  statusCode: 422
+  statusText: Unprocessable Entity
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "message": "Validation failed",
+        "errors": [
+          {
+            "field": "birthday",
+            "message": "cannot be in the future"
+          }
+        ]
+      }
+order: 2000

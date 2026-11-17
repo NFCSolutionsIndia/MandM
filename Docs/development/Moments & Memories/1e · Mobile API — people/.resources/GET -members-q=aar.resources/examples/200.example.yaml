@@ -1,0 +1,38 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/members?q=aar&limit=20"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "items": [
+          {
+            "id": "019a8c10-0000-7000-8000-00000000a001",
+            "name": "Aarav",
+            "relationship": "son",
+            "relationshipLabel": null,
+            "birthday": "2012-05-04",
+            "birthdayPrecision": "day",
+            "anniversary": null,
+            "phone": "+919876543210",
+            "email": "aarav@example.com",
+            "notes": "Loves cricket",
+            "avatarMediaId": null,
+            "avatarUrl": null,
+            "deceasedAt": null,
+            "mergedIntoId": null,
+            "createdAt": "2026-11-16T10:00:00.000Z",
+            "updatedAt": "2026-11-16T10:00:00.000Z"
+          }
+        ],
+        "nextCursor": null
+      }
+order: 1000

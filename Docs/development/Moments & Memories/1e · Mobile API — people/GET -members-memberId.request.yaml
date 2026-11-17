@@ -1,0 +1,14 @@
+$kind: http-request
+name: "GET /members/{{memberId}}"
+description: "The person, plus occasions (next birthday with the age they turn, next anniversary, linked events) and capsule counts. 404 for a person who is not yours."
+url: "{{baseUrl}}/api/v1/members/{{memberId}}"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/GET -members-memberId.resources/examples
+order: 4000

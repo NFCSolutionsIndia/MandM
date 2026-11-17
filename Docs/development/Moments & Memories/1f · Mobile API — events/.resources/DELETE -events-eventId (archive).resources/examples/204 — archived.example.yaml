@@ -1,0 +1,10 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/events/{{eventId}}"
+  method: DELETE
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 204
+  statusText: No Content
+order: 1000

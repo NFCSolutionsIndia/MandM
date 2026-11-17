@@ -1,0 +1,14 @@
+$kind: http-request
+name: "POST /events/{{eventId}}/restore"
+url: "{{baseUrl}}/api/v1/events/{{eventId}}/restore"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('not archived', () => pm.expect(pm.response.json().archivedAt).to.eql(null));
+    language: text/javascript
+examples: ./.resources/POST -events-eventId-restore.resources/examples
+order: 6000

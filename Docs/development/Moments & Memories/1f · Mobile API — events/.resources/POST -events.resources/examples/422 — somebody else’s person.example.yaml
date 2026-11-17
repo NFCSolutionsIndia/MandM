@@ -1,0 +1,37 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/events"
+  method: POST
+  headers:
+    Authorization: Bearer {{token}}
+    Content-Type: application/json
+  body:
+    type: text
+    content: |-
+      {
+        "title": "Parents’ wedding",
+        "type": "anniversary",
+        "eventDate": "1988-12-01",
+        "recurrence": "yearly",
+        "memberIds": [
+          "{{memberId}}"
+        ]
+      }
+response:
+  statusCode: 422
+  statusText: Unprocessable Entity
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "message": "Validation failed",
+        "errors": [
+          {
+            "field": "memberIds",
+            "message": "includes a person who is not in your people"
+          }
+        ]
+      }
+order: 2000

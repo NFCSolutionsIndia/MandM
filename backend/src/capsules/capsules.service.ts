@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 
@@ -55,6 +56,10 @@ export class CapsulesService {
 
     return translatingPgErrors(() =>
       this.db.tx(async (tx) => {
+        if (body.unlockKind === 'milestone' && body.milestoneMemberId) {
+          await this.assertMilestoneBirthday(tx, body.milestoneMemberId);
+        }
+
         const created = await tx.execute<{ id: string; state: string }>(sql`
           INSERT INTO capsules
             (id, vault_id, owner_id, title, sender_note, state, unlock_kind,
@@ -404,6 +409,13 @@ export class CapsulesService {
           );
         }
 
+        // The birthday may have changed since the capsule was drafted.
+        if (c.unlock_kind === 'milestone') {
+          const m = await tx.execute<{ milestone_member_id: string }>(sql`
+            SELECT milestone_member_id FROM capsules WHERE id = ${capsuleId}`);
+          await this.assertMilestoneBirthday(tx, m.rows[0]!.milestone_member_id);
+        }
+
         if (c.unlock_kind === 'datetime' && !c.is_future) {
           throw new BadRequestException(
             'That unlock time has already passed. Choose a future date.',
@@ -474,6 +486,36 @@ export class CapsulesService {
         };
       }),
     );
+  }
+
+  /**
+   * "Open when Aarav turns 18" needs the day Aarav was born (BE-04). A
+   * birthday known only to the month or year, or none, is a 422 — at create
+   * and again at seal. A person the caller cannot see gets the same 422.
+   */
+  private async assertMilestoneBirthday(
+    tx: Parameters<Parameters<DbService['tx']>[0]>[0],
+    memberId: string,
+  ) {
+    const found = await tx.execute<{ known: boolean }>(sql`
+      SELECT (birthday IS NOT NULL
+              AND COALESCE(birthday_precision, 'day') IN ('exact', 'day')) AS known
+        FROM members WHERE id = ${memberId}`);
+    const row = found.rows[0];
+    if (!row || !row.known) {
+      throw new UnprocessableEntityException({
+        message: 'Validation failed',
+        reason: row ? 'milestone_birthday_unknown' : 'milestone_member_not_found',
+        errors: [
+          {
+            field: 'milestoneMemberId',
+            message: row
+              ? 'this person’s birthday must be known to the day for a milestone capsule'
+              : 'is not one of your people',
+          },
+        ],
+      });
+    }
   }
 
   /**
