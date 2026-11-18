@@ -1,0 +1,21 @@
+$kind: http-request
+name: "GET /calendar?from=today&to=Dec 31&types=birthday&q=birthday (list view)"
+description: |-
+  The List tab: today to the end of the year. The filter chips are types (All = absent, Birthdays = birthday, Holidays = holiday, Capsules = capsule); the search box is q, matched against the title and the person's name or nickname. Group into "This month" / "Later this year" on the device.
+url: "{{baseUrl}}/api/v1/calendar?from=2026-03-15&to=2026-12-31&types=birthday&q=birthday"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  from: "2026-03-15"
+  to: "2026-12-31"
+  types: "birthday"
+  q: "birthday"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('only birthdays', () => pm.response.json().items.forEach((i) => pm.expect(i.type).to.eql('birthday')));
+    language: text/javascript
+examples: ./.resources/GET -calendar-list-birthdays.resources/examples
+order: 2000

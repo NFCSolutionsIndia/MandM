@@ -1,0 +1,117 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/calendar/summary?year=2026"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "year": 2026,
+        "today": "2026-03-15",
+        "months": [
+          {
+            "month": 1,
+            "count": 0,
+            "days": 0,
+            "byType": {}
+          },
+          {
+            "month": 2,
+            "count": 3,
+            "days": 3,
+            "byType": {
+              "birthday": 2,
+              "anniversary": 1
+            }
+          },
+          {
+            "month": 3,
+            "count": 6,
+            "days": 5,
+            "byType": {
+              "birthday": 4,
+              "holiday": 1,
+              "capsule": 1
+            }
+          },
+          {
+            "month": 4,
+            "count": 4,
+            "days": 4,
+            "byType": {
+              "birthday": 3,
+              "event": 1
+            }
+          },
+          {
+            "month": 5,
+            "count": 2,
+            "days": 2,
+            "byType": {
+              "birthday": 2
+            }
+          },
+          {
+            "month": 6,
+            "count": 2,
+            "days": 2,
+            "byType": {
+              "anniversary": 2
+            }
+          },
+          {
+            "month": 7,
+            "count": 1,
+            "days": 1,
+            "byType": {
+              "birthday": 1
+            }
+          },
+          {
+            "month": 8,
+            "count": 1,
+            "days": 1,
+            "byType": {
+              "birthday": 1
+            }
+          },
+          {
+            "month": 9,
+            "count": 0,
+            "days": 0,
+            "byType": {}
+          },
+          {
+            "month": 10,
+            "count": 0,
+            "days": 0,
+            "byType": {}
+          },
+          {
+            "month": 11,
+            "count": 2,
+            "days": 2,
+            "byType": {
+              "birthday": 1,
+              "holiday": 1
+            }
+          },
+          {
+            "month": 12,
+            "count": 3,
+            "days": 3,
+            "byType": {
+              "birthday": 2,
+              "holiday": 1
+            }
+          }
+        ]
+      }
+order: 1000

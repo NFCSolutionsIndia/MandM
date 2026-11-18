@@ -11,6 +11,8 @@ body:
   content: |-
     {
       "name": "Aarav",
+      "nickname": "Aaru",
+      "location": "Pune, MH",
       "relationship": "son",
       "birthday": "2012-05-04",
       "birthdayPrecision": "day",

@@ -23,6 +23,7 @@ response:
             "title": "Open on Thursday",
             "date": "2026-11-19",
             "daysLeft": 3,
+            "turns": null,
             "person": null
           },
           {
@@ -32,9 +33,13 @@ response:
             "title": "Mom's birthday",
             "date": "2026-11-23",
             "daysLeft": 7,
+            "turns": null,
             "person": {
               "id": "019a7b3c-0000-7000-8000-0000000000a1",
               "name": "Mom",
+              "nickname": null,
+              "displayName": "Mom",
+              "location": null,
               "avatarUrl": "https://…signed…",
               "deceased": false
             }
@@ -46,6 +51,7 @@ response:
             "title": "Housewarming",
             "date": "2026-11-26",
             "daysLeft": 10,
+            "turns": null,
             "person": null
           },
           {
@@ -55,9 +61,13 @@ response:
             "title": "Ravi's birthday",
             "date": "2026-12-26",
             "daysLeft": 40,
+            "turns": null,
             "person": {
               "id": "019a7b3c-0000-7000-8000-0000000000a2",
               "name": "Ravi",
+              "nickname": null,
+              "displayName": "Ravi",
+              "location": null,
               "avatarUrl": null,
               "deceased": false
             }
@@ -69,13 +79,20 @@ response:
             "title": "For Aarav at 18",
             "date": "2030-05-04",
             "daysLeft": 1265,
+            "turns": null,
             "person": {
               "id": "019a7b3c-0000-7000-8000-0000000000a3",
               "name": "Aarav",
+              "nickname": null,
+              "displayName": "Aarav",
+              "location": null,
               "avatarUrl": null,
               "deceased": false
             }
           }
-        ]
+        ],
+        "counts": {
+          "next7Days": 1
+        }
       }
 order: 1000

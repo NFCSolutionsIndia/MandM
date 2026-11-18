@@ -1,0 +1,18 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/notifications/read-all"
+  method: POST
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "updated": 3
+      }
+order: 1000

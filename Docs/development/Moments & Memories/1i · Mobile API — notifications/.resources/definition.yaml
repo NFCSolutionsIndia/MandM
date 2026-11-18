@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  BE-12, for the Notifications screen and Home's bell.
+
+  The app only reads notifications and marks them read; background jobs create them (BE-15, not built yet, so a new account sees an empty list).
+  Each item: title and body (from the job, or a default per type), actor { memberId, name, avatarUrl } for the photo on the left, deepLink, read/readAt, createdAt, and data (the whole payload, for type-specific extras such as clip counts).
+  Group into "Today" / "This week" on the device from createdAt.
+order: 5900

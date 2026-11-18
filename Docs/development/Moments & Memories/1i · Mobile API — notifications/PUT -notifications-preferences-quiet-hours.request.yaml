@@ -1,0 +1,24 @@
+$kind: http-request
+name: "PUT /notifications/preferences/quiet-hours"
+description: |-
+  "Quiet hours 10 PM – 7 AM": 24-hour HH:MM in the user's timezone; start may be later than end (it wraps midnight). start = end, a bad time or an extra field is 422. Returns the preferences.
+url: "{{baseUrl}}/api/v1/notifications/preferences/quiet-hours"
+method: PUT
+headers:
+  Authorization: Bearer {{token}}
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "start": "22:00",
+      "end": "07:00"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('saved', () => pm.expect(pm.response.json().quietHours.start).to.eql('22:00'));
+    language: text/javascript
+examples: ./.resources/PUT -notifications-preferences-quiet-hours.resources/examples
+order: 6000

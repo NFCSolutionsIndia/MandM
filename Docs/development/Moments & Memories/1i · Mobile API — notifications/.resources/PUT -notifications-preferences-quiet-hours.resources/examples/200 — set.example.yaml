@@ -1,0 +1,97 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/notifications/preferences/quiet-hours"
+  method: PUT
+  headers:
+    Authorization: Bearer {{token}}
+  body:
+    type: text
+    content: |-
+      {
+        "start": "22:00",
+        "end": "07:00"
+      }
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "quietHours": {
+          "start": "22:00",
+          "end": "07:00",
+          "timezone": "Asia/Kolkata"
+        },
+        "types": [
+          {
+            "type": "capsule_delivered",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "capsule_opened",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "capsule_reply",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "occasion_reminder",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "on_this_day",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "memory_added",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "vault_invite",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "storage_warning",
+            "push": true,
+            "email": true,
+            "suppressible": true
+          },
+          {
+            "type": "capsule_failed",
+            "push": true,
+            "email": true,
+            "suppressible": false
+          },
+          {
+            "type": "security_alert",
+            "push": true,
+            "email": true,
+            "suppressible": false
+          },
+          {
+            "type": "billing",
+            "push": true,
+            "email": true,
+            "suppressible": false
+          }
+        ]
+      }
+order: 1000

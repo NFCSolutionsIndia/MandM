@@ -15,6 +15,9 @@ response:
     type: json
     content: |-
       {
-        "items": []
+        "items": [],
+        "counts": {
+          "next7Days": 0
+        }
       }
 order: 2000

@@ -1,0 +1,18 @@
+$kind: http-request
+name: "GET /calendar/summary?year=2026 (Jump to)"
+description: |-
+  All twelve months: count is every date, days is how many distinct days have one, byType splits count by type. The design's "5 dates" under March is count or days (open question P-6 in SCREEN_API_MAP.md); both are returned so the app can show either. Accepts types like /calendar.
+url: "{{baseUrl}}/api/v1/calendar/summary?year=2026"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  year: "2026"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('twelve months', () => pm.expect(pm.response.json().months).to.have.length(12));
+    language: text/javascript
+examples: ./.resources/GET -calendar-summary-year=2026.resources/examples
+order: 3000

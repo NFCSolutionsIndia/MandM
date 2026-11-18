@@ -162,6 +162,13 @@
       "when": 1794823625349,
       "tag": "0022_upcoming_moments",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794925707806,
+      "tag": "0023_member_nickname_location",
+      "breakpoints": true
     }
   ]
 }

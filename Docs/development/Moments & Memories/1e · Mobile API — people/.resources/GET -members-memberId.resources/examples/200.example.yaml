@@ -15,6 +15,9 @@ response:
       {
         "id": "019a8c10-0000-7000-8000-00000000a001",
         "name": "Aarav",
+        "nickname": null,
+        "displayName": "Aarav",
+        "location": null,
         "relationship": "son",
         "relationshipLabel": null,
         "birthday": "2012-05-04",
@@ -50,6 +53,7 @@ response:
           "milestone": 1,
           "pendingDeliveries": 0,
           "delivered": 0
-        }
+        },
+        "memoryCount": 0
       }
 order: 1000

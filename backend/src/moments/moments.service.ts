@@ -1,9 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { sql, type SQL } from 'drizzle-orm';
 
+import { NO_JIT } from '../common/no-jit.js';
 import { DbService } from '../db/db.service.js';
 import { StorageService } from '../storage/storage.service.js';
-import type { MomentSource, MomentType, UpcomingMoment } from './moments.dto.js';
+import type {
+  MomentSource,
+  MomentType,
+  UpcomingMoment,
+  UpcomingResponse,
+} from './moments.dto.js';
 
 type Row = {
   type: MomentType;
@@ -12,8 +18,12 @@ type Row = {
   title: string;
   date: string;
   days_left: number;
+  turns: number | null;
+  next_7_days: string | number;
   person_id: string | null;
   person_name: string | null;
+  person_nickname: string | null;
+  person_location: string | null;
   person_deceased: boolean | null;
   avatar_key: string | null;
 };
@@ -22,8 +32,16 @@ type Row = {
  * The one query behind the endpoint, exported so a test can EXPLAIN exactly
  * what runs. Every source is joined from `me` on owner_id, which is what lets
  * the planner use the owner indexes instead of reading every member.
+ *
+ * `types` narrows the sources (Home's "Sending soon" asks for capsules only).
+ * `next_7_days` counts every matching moment from today to today + 6, before
+ * the LIMIT, so "3 moments coming up this week" does not depend on `limit`.
  */
-export function upcomingSql(limit: number, at: Date): SQL {
+export function upcomingSql(limit: number, at: Date, types?: readonly MomentType[]): SQL {
+  const typeFilter =
+    types && types.length > 0
+      ? sql`AND x.type IN (${sql.join(types.map((t) => sql`${t}`), sql`, `)})`
+      : sql``;
   return sql`
     WITH me AS (
       SELECT u.id AS user_id,
@@ -41,6 +59,7 @@ export function upcomingSql(limit: number, at: Date): SQL {
                app_date_in_year(mm.birthday,
                  extract(year FROM mm.birthday)::int + app_milestone_age(c.milestone_spec))
              ) AS date,
+             NULL::date AS since,
              COALESCE(c.milestone_member_id, (
                SELECT r.member_id FROM capsule_recipients r
                 WHERE r.capsule_id = c.id AND r.member_id IS NOT NULL
@@ -55,8 +74,8 @@ export function upcomingSql(limit: number, at: Date): SQL {
 
       -- Birthdays on my people's records. A birthday known only to the
       -- month or year has no day to count down to.
-      SELECT 'birthday', m.id, 'person', m.name || '''s birthday',
-             app_next_occurrence(m.birthday, 'yearly', me.today), m.id
+      SELECT 'birthday', m.id, 'person', COALESCE(m.nickname, m.name) || '''s birthday',
+             app_next_occurrence(m.birthday, 'yearly', me.today), m.birthday, m.id
         FROM me
         JOIN members m ON m.owner_id = me.user_id
        WHERE m.birthday IS NOT NULL
@@ -65,8 +84,8 @@ export function upcomingSql(limit: number, at: Date): SQL {
 
       UNION ALL
 
-      SELECT 'anniversary', m.id, 'person', m.name || '''s anniversary',
-             app_next_occurrence(m.anniversary, 'yearly', me.today), m.id
+      SELECT 'anniversary', m.id, 'person', COALESCE(m.nickname, m.name) || '''s anniversary',
+             app_next_occurrence(m.anniversary, 'yearly', me.today), m.anniversary, m.id
         FROM me
         JOIN members m ON m.owner_id = me.user_id
        WHERE m.anniversary IS NOT NULL
@@ -78,6 +97,9 @@ export function upcomingSql(limit: number, at: Date): SQL {
       SELECT CASE WHEN e.type IN ('birthday', 'anniversary') THEN e.type ELSE 'event' END,
              e.id, 'event', e.title,
              app_next_occurrence(e.event_date, e.recurrence, me.today),
+             -- A yearly birthday or anniversary counts years ("Grandpa turns 80").
+             CASE WHEN e.recurrence = 'yearly' AND e.type IN ('birthday', 'anniversary')
+                  THEN e.event_date END,
              (SELECT em.member_id FROM event_members em
                 JOIN members p ON p.id = em.member_id
                WHERE em.event_id = e.id
@@ -98,7 +120,10 @@ export function upcomingSql(limit: number, at: Date): SQL {
     SELECT x.type, x.id, x.source, x.title,
            to_char(x.date, 'YYYY-MM-DD') AS date,
            (x.date - me.today) AS days_left,
+           (extract(year FROM x.date) - extract(year FROM x.since))::int AS turns,
+           count(*) FILTER (WHERE x.date - me.today < 7) OVER () AS next_7_days,
            p.id AS person_id, p.name AS person_name,
+           p.nickname AS person_nickname, p.location AS person_location,
            (p.deceased_at IS NOT NULL) AS person_deceased,
            a.storage_key AS avatar_key
       FROM moments x
@@ -106,6 +131,7 @@ export function upcomingSql(limit: number, at: Date): SQL {
       LEFT JOIN members p ON p.id = x.member_id
       LEFT JOIN media_assets a ON a.id = p.avatar_media_id AND a.deleted_at IS NULL
      WHERE x.date >= me.today
+       ${typeFilter}
      ORDER BY x.date, x.type, x.title, x.id
      LIMIT ${limit}
   `;
@@ -141,11 +167,22 @@ export class MomentsService {
    * `at` is the instant "now" is taken from. It comes from the application
    * clock rather than the database's `now()` so a test can stand at 23:30 UTC.
    */
-  async upcoming(limit: number, at: Date = new Date()): Promise<{ items: UpcomingMoment[] }> {
-    const result = await this.db.tx((tx) => tx.execute<Row>(upcomingSql(limit, at)));
+  async upcoming(
+    limit: number,
+    at: Date = new Date(),
+    types?: readonly MomentType[],
+  ): Promise<UpcomingResponse> {
+    const result = await this.db.tx(async (tx) => {
+      await tx.execute(NO_JIT);
+      return tx.execute<Row>(upcomingSql(limit, at, types));
+    });
 
     const items = await Promise.all(result.rows.map((r) => this.shape(r)));
-    return { items };
+    return {
+      items,
+      // The window count rides on every row; with no rows there is nothing ahead.
+      counts: { next7Days: Number(result.rows[0]?.next_7_days ?? 0) },
+    };
   }
 
   private async shape(r: Row): Promise<UpcomingMoment> {
@@ -156,10 +193,14 @@ export class MomentsService {
       title: r.title,
       date: r.date,
       daysLeft: Number(r.days_left),
+      turns: r.turns === null ? null : Number(r.turns),
       person: r.person_id
         ? {
             id: r.person_id,
             name: r.person_name!,
+            nickname: r.person_nickname,
+            displayName: r.person_nickname ?? r.person_name!,
+            location: r.person_location,
             avatarUrl: r.avatar_key ? await this.avatarUrl(r.avatar_key) : null,
             deceased: Boolean(r.person_deceased),
           }

@@ -1,0 +1,9 @@
+$kind: collection
+description: |-
+  BE-11, for the Calendar tab: month grid, year view, list view and the "Jump to" sheet.
+
+  One expansion serves all of them: my people's birthdays and anniversaries, my events (yearly and monthly ones repeat), and my capsules on the day they open.
+  types: birthday, anniversary, event, holiday (my festival events), capsule. Absent = all.
+  Dates are calendar days in my timezone. 29 February is 28 February in common years. Nothing repeats before it first happened. daysLeft is negative for days already past.
+  A built-in public-holiday catalogue does not exist yet (SCREEN_API_MAP.md, P-4): "holiday" is only what the user added as a festival event.
+order: 5800

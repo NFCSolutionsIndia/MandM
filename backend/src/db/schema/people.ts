@@ -70,6 +70,20 @@ export const members = pgTable(
     name: varchar('name', { length: 200 }).notNull(),
 
     /**
+     * What the user calls this person: `Mom`, `Dad`, `Nani`. The screens put it
+     * first ("Mom's birthday", "Dad turns 60") with the full name underneath
+     * ("Linda Carter"). Free text, because nobody's mother is called the
+     * same thing in every family or language. Null means "use the name".
+     */
+    nickname: varchar('nickname', { length: 64 }),
+
+    /**
+     * Where they live, as the user wrote it: `Austin, TX`. Display text only,
+     * never geocoded. A family vault has no business knowing coordinates.
+     */
+    location: varchar('location', { length: 120 }),
+
+    /**
      * `mother`, `daughter`, `school friend` — a suggested vocabulary, not a
      * constraint.
      *

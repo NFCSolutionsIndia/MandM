@@ -17,6 +17,6 @@ export class MomentsController {
   async upcoming(
     @Query(new ZodValidationPipe(upcomingQuerySchema)) query: UpcomingQueryDto,
   ) {
-    return this.moments.upcoming(query.limit);
+    return this.moments.upcoming(query.limit, new Date(), query.types);
   }
 }

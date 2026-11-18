@@ -1,0 +1,20 @@
+$kind: http-request
+name: "GET /notifications?limit=20"
+description: |-
+  Newest first, keyset-paged: pass nextCursor back as cursor. unread=true lists only unread ones. Saves the first id as {{notificationId}}.
+url: "{{baseUrl}}/api/v1/notifications?limit=20"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  limit: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const items = pm.response.json().items;
+      if (items.length) pm.collectionVariables.set('notificationId', items[0].id);
+      pm.test('newest first', () => { for (let i = 1; i < items.length; i++) pm.expect(items[i].createdAt <= items[i-1].createdAt).to.be.true; });
+    language: text/javascript
+examples: ./.resources/GET -notifications.resources/examples
+order: 2000

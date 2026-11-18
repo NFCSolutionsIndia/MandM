@@ -4,6 +4,9 @@ import { APP_GUARD } from '@nestjs/core';
 
 import { AdminModule } from './admin/admin.module.js';
 import { AppVersionModule } from './app-version/app-version.module.js';
+import { CalendarModule } from './calendar/calendar.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { SearchModule } from './search/search.module.js';
 import { UsersModule } from './users/users.module.js';
 import { MomentsModule } from './moments/moments.module.js';
 import { PeopleModule } from './people/people.module.js';
@@ -55,6 +58,9 @@ import { VaultsModule } from './vaults/vaults.module.js';
     UsersModule,
     MomentsModule,
     PeopleModule,
+    CalendarModule,
+    NotificationsModule,
+    SearchModule,
     HealthModule,
   ],
   providers: [

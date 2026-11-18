@@ -1,0 +1,25 @@
+$kind: http-request
+name: "GET /moments/upcoming?types=capsule (Sending soon)"
+description: |-
+  Home's "Sending soon" row: only my sealed, undelivered capsules, soonest first.
+
+  types is a comma list of capsule, birthday, anniversary, event (absent = all). An unknown type is 400.
+  Every response also carries counts.next7Days: matching moments from today to today + 6, whatever limit is. Home's "3 moments coming up this week" reads it from the unfiltered call.
+  Each item has turns (the age reached, or years married; null for capsules and one-off events) and person.nickname / displayName / location ("Mom" over "Linda Carter · Austin, TX").
+url: "{{baseUrl}}/api/v1/moments/upcoming?types=capsule&limit=10"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  types: "capsule"
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const body = pm.response.json();
+      pm.test('only capsules', () => body.items.forEach((i) => pm.expect(i.type).to.eql('capsule')));
+      pm.test('has counts.next7Days', () => pm.expect(body.counts.next7Days).to.be.a('number'));
+    language: text/javascript
+examples: ./.resources/GET -moments-upcoming-types=capsule (Sending soon).resources/examples
+order: 3000

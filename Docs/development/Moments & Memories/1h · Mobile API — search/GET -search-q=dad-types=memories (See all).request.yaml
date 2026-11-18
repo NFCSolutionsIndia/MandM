@@ -1,0 +1,20 @@
+$kind: http-request
+name: "GET /search?q=dad&types=memories&limit=20 (See all)"
+description: |-
+  One section, paged. Send the section's nextCursor back as cursor, with the same q and the single type.
+url: "{{baseUrl}}/api/v1/search?q=dad&types=memories&limit=20"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  q: "dad"
+  types: "memories"
+  limit: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('memories only', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['memories', 'q']));
+    language: text/javascript
+examples: ./.resources/GET -search-q=dad-types=memories (See all).resources/examples
+order: 2000

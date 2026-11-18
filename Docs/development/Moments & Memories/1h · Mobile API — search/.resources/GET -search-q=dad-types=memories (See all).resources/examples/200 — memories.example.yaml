@@ -1,0 +1,31 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/search?q=dad&types=memories&limit=20"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "q": "dad",
+        "memories": {
+          "items": [
+            {
+              "id": "019a7b3c-0000-7000-8000-000000000401",
+              "vaultId": "019a7b3c-0000-7000-8000-000000000001",
+              "title": "Dad’s 60th video",
+              "occurredAt": "2026-03-01T10:00:00.000Z",
+              "mediaKind": "video",
+              "thumbnailUrl": "https://…signed…"
+            }
+          ],
+          "nextCursor": null
+        }
+      }
+order: 1000

@@ -1,0 +1,16 @@
+$kind: http-request
+name: "DELETE /notifications/preferences/quiet-hours"
+description: |-
+  Turns quiet hours off. Returns the preferences.
+url: "{{baseUrl}}/api/v1/notifications/preferences/quiet-hours"
+method: DELETE
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('off', () => pm.expect(pm.response.json().quietHours).to.be.null);
+    language: text/javascript
+examples: ./.resources/DELETE -notifications-preferences-quiet-hours.resources/examples
+order: 7000

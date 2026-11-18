@@ -1,0 +1,24 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/calendar?from=2026-01-01&to=2027-01-02"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 400
+  statusText: "Bad Request"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "message": "Validation failed",
+        "errors": [
+          {
+            "field": "to",
+            "message": "the range may cover at most 366 days"
+          }
+        ]
+      }
+order: 2000

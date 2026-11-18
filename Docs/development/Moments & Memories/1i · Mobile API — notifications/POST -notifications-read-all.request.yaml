@@ -1,0 +1,15 @@
+$kind: http-request
+name: "POST /notifications/read-all (Mark all read)"
+description: |-
+  Marks every unread one read. updated is how many changed.
+url: "{{baseUrl}}/api/v1/notifications/read-all"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/POST -notifications-read-all.resources/examples
+order: 4000

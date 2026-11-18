@@ -1,0 +1,15 @@
+$kind: http-request
+name: "POST /notifications/:id/read"
+description: |-
+  Tapping one. 204, also when it was already read. Somebody else's, or a malformed id, is 404.
+url: "{{baseUrl}}/api/v1/notifications/{{notificationId}}/read"
+method: POST
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('204', () => pm.response.to.have.status(204));
+    language: text/javascript
+examples: ./.resources/POST -notifications-notificationId-read.resources/examples
+order: 3000

@@ -3,6 +3,7 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
+  Logger,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import { sql } from 'drizzle-orm';
 import { rethrowAsHttp, sqlstate } from '../common/pg-errors.js';
 import type { Env } from '../config/env.schema.js';
 import { DbService } from '../db/db.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import {
   normalizeUsername,
   suggestionCandidates,
@@ -26,6 +28,8 @@ type MeRow = {
   username: string;
   name: string;
   plan: string;
+  timezone: string;
+  avatar_key: string | null;
   created_at: Date;
   username_changed_at: Date | string | null;
 };
@@ -37,8 +41,11 @@ export type UsernameUnavailableReason = 'invalid' | 'reserved' | 'taken';
 export class UsersService {
   private readonly changeDays: number;
 
+  private readonly log = new Logger(UsersService.name);
+
   constructor(
     private readonly db: DbService,
+    private readonly storage: StorageService,
     config: ConfigService<Env, true>,
   ) {
     this.changeDays = config.get('USERNAME_CHANGE_DAYS', { infer: true });
@@ -48,10 +55,11 @@ export class UsersService {
   async me() {
     const result = await this.db.tx((tx) =>
       tx.execute<MeRow>(
-        sql`SELECT id, email, username::text AS username, name, plan,
-                   created_at, username_changed_at
-              FROM users
-             WHERE id = app_current_user()`,
+        sql`SELECT u.id, u.email, u.username::text AS username, u.name, u.plan, u.timezone,
+                   a.storage_key AS avatar_key, u.created_at, u.username_changed_at
+              FROM users u
+              LEFT JOIN media_assets a ON a.id = u.avatar_media_id AND a.deleted_at IS NULL
+             WHERE u.id = app_current_user()`,
       ),
     );
     const user = result.rows[0];
@@ -63,6 +71,10 @@ export class UsersService {
       username: user.username,
       name: user.name,
       plan: user.plan,
+      /** IANA zone. "Today" on the calendar and every countdown is in this zone. */
+      timezone: user.timezone,
+      /** Home's top-right photo. A short-lived signed URL, or null. */
+      avatarUrl: user.avatar_key ? await this.avatarUrl(user.avatar_key) : null,
       createdAt: user.created_at,
       usernameChangedAt: this.iso(user.username_changed_at),
       /** When the user may next choose a handle; null means now. */
@@ -159,6 +171,16 @@ export class UsersService {
   }
 
   /** Raw `execute` returns timestamps as strings; both are accepted. */
+  /** A Home screen without the avatar beats no Home screen. */
+  private async avatarUrl(key: string): Promise<string | null> {
+    try {
+      return (await this.storage.presignDownload(key)).url;
+    } catch (error) {
+      this.log.warn(`avatar URL not signed: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
   private nextChange(changedAt: Date | string | null): string | null {
     if (!changedAt) return null;
     const next = new Date(new Date(changedAt).getTime() + this.changeDays * 86_400_000);

@@ -1,0 +1,77 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/notifications?limit=20"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "items": [
+          {
+            "id": "019a7b3c-0000-7000-8000-000000000501",
+            "type": "capsule_reply",
+            "title": "Mom loved your video",
+            "body": "“Best birthday surprise ever!”",
+            "actor": {
+              "memberId": "019a7b3c-0000-7000-8000-000000000101",
+              "name": "Mom",
+              "avatarUrl": "https://…signed…"
+            },
+            "deepLink": "mm://capsules/019a7b3c-0000-7000-8000-000000000301",
+            "read": false,
+            "readAt": null,
+            "createdAt": "2026-03-15T09:58:00.000Z",
+            "data": {
+              "title": "Mom loved your video",
+              "body": "“Best birthday surprise ever!”",
+              "memberId": "019a7b3c-0000-7000-8000-000000000101"
+            }
+          },
+          {
+            "id": "019a7b3c-0000-7000-8000-000000000502",
+            "type": "occasion_reminder",
+            "title": "Dad turns 60 in 6 days",
+            "body": "Video ready · gift not picked yet",
+            "actor": {
+              "memberId": "019a7b3c-0000-7000-8000-000000000102",
+              "name": "Dad",
+              "avatarUrl": "https://…signed…"
+            },
+            "deepLink": null,
+            "read": false,
+            "readAt": null,
+            "createdAt": "2026-03-15T03:30:00.000Z",
+            "data": {
+              "title": "Dad turns 60 in 6 days",
+              "body": "Video ready · gift not picked yet",
+              "memberId": "019a7b3c-0000-7000-8000-000000000102"
+            }
+          },
+          {
+            "id": "019a7b3c-0000-7000-8000-000000000503",
+            "type": "capsule_delivered",
+            "title": "Delivered to Grandma by email",
+            "body": "Text didn’t go through — we switched automatically",
+            "actor": null,
+            "deepLink": null,
+            "read": true,
+            "readAt": "2026-03-12T11:00:00.000Z",
+            "createdAt": "2026-03-12T10:00:00.000Z",
+            "data": {
+              "title": "Delivered to Grandma by email",
+              "body": "Text didn’t go through — we switched automatically",
+              "channel": "email",
+              "fallbackFrom": "sms"
+            }
+          }
+        ],
+        "nextCursor": null
+      }
+order: 1000

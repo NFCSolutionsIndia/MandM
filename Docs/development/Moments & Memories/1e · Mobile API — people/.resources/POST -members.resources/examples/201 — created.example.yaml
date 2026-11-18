@@ -10,6 +10,8 @@ request:
     content: |-
       {
         "name": "Aarav",
+        "nickname": "Aaru",
+        "location": "Pune, MH",
         "relationship": "son",
         "birthday": "2012-05-04",
         "birthdayPrecision": "day",
@@ -30,6 +32,9 @@ response:
       {
         "id": "019a8c10-0000-7000-8000-00000000a001",
         "name": "Aarav",
+        "nickname": "Aaru",
+        "displayName": "Aaru",
+        "location": "Pune, MH",
         "relationship": "son",
         "relationshipLabel": null,
         "birthday": "2012-05-04",
@@ -57,6 +62,7 @@ response:
           "milestone": 0,
           "pendingDeliveries": 0,
           "delivered": 0
-        }
+        },
+        "memoryCount": 0
       }
 order: 1000

@@ -1,0 +1,82 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/calendar?from=2026-03-15&to=2026-12-31&types=birthday&q=birthday"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "from": "2026-03-15",
+        "to": "2026-12-31",
+        "today": "2026-03-15",
+        "items": [
+          {
+            "type": "birthday",
+            "source": "person",
+            "id": "019a7b3c-0000-7000-8000-000000000101",
+            "title": "Mom's birthday",
+            "date": "2026-03-17",
+            "daysLeft": 2,
+            "turns": 68,
+            "recurrence": "yearly",
+            "capsuleState": null,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-000000000101",
+              "name": "Linda Carter",
+              "nickname": "Mom",
+              "displayName": "Mom",
+              "location": "Austin, TX",
+              "avatarUrl": "https://…signed…",
+              "deceased": false
+            }
+          },
+          {
+            "type": "birthday",
+            "source": "person",
+            "id": "019a7b3c-0000-7000-8000-000000000102",
+            "title": "Dad's birthday",
+            "date": "2026-03-21",
+            "daysLeft": 6,
+            "turns": 60,
+            "recurrence": "yearly",
+            "capsuleState": null,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-000000000102",
+              "name": "Mike Carter",
+              "nickname": "Dad",
+              "displayName": "Dad",
+              "location": "Austin, TX",
+              "avatarUrl": "https://…signed…",
+              "deceased": false
+            }
+          },
+          {
+            "type": "birthday",
+            "source": "person",
+            "id": "019a7b3c-0000-7000-8000-000000000103",
+            "title": "Grandma Rose's birthday",
+            "date": "2026-03-28",
+            "daysLeft": 13,
+            "turns": 85,
+            "recurrence": "yearly",
+            "capsuleState": null,
+            "person": {
+              "id": "019a7b3c-0000-7000-8000-000000000103",
+              "name": "Rose Carter",
+              "nickname": "Grandma Rose",
+              "displayName": "Grandma Rose",
+              "location": null,
+              "avatarUrl": "https://…signed…",
+              "deceased": false
+            }
+          }
+        ]
+      }
+order: 1000

@@ -1,0 +1,24 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/search?q=dad&cursor=abc"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 422
+  statusText: "Unprocessable Entity"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "message": "Validation failed",
+        "errors": [
+          {
+            "field": "cursor",
+            "message": "a cursor pages one section; send exactly one type with it"
+          }
+        ]
+      }
+order: 2000

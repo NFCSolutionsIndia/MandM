@@ -33,6 +33,10 @@ const pastDate = isoDate.refine(
 
 const fields = {
   name: z.string().trim().min(1, 'is required').max(200),
+  /** What the user calls them: "Mom", "Dad". Null clears it. */
+  nickname: z.string().trim().min(1).max(64).nullable(),
+  /** Where they live, as display text: "Austin, TX". */
+  location: z.string().trim().min(1).max(120).nullable(),
   relationship: z.enum(RELATIONSHIPS).nullable(),
   relationshipLabel: z.string().trim().min(1).max(64).nullable(),
   birthday: pastDate.nullable(),
@@ -65,6 +69,8 @@ const precisionRule = { path: ['birthdayPrecision'], message: 'needs a birthday'
 export const createMemberSchema = z
   .object({
     name: fields.name,
+    nickname: fields.nickname.optional(),
+    location: fields.location.optional(),
     relationship: fields.relationship.optional(),
     relationshipLabel: fields.relationshipLabel.optional(),
     birthday: fields.birthday.optional(),
@@ -88,6 +94,8 @@ export type CreateMemberDto = z.infer<typeof createMemberSchema>;
 export const updateMemberSchema = z
   .object({
     name: fields.name.optional(),
+    nickname: fields.nickname.optional(),
+    location: fields.location.optional(),
     relationship: fields.relationship.optional(),
     relationshipLabel: fields.relationshipLabel.optional(),
     birthday: fields.birthday.optional(),

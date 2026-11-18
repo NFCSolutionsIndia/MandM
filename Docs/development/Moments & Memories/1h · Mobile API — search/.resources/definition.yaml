@@ -1,0 +1,10 @@
+$kind: collection
+description: |-
+  BE-07, for the Search screen: chips All · People · Memories · Dates. There is no Chats section (the design has none; decision D-7).
+
+  people: my people whose name or nickname matches, with location and memoryCount ("Dad · Mike Carter · Austin, TX · 18 memories").
+  memories: memories I can see whose title, note or tagged people match, newest first, with mediaKind and a signed thumbnailUrl.
+  dates: the next year of birthdays, anniversaries, events and capsules whose title or person matches, soonest first (same items as /calendar).
+
+  q is 2 to 100 characters (else 422). "All" asks for every type with a small limit; "See all" asks for one type and pages it with that section's nextCursor. A cursor with more than one type is 422. Recent searches live on the device.
+order: 5850

@@ -24,6 +24,9 @@ response:
       {
         "id": "019a8c10-0000-7000-8000-00000000a002",
         "name": "Kavya",
+        "nickname": null,
+        "displayName": "Kavya",
+        "location": null,
         "relationship": "other",
         "relationshipLabel": "school friend",
         "birthday": null,
@@ -47,6 +50,7 @@ response:
           "milestone": 0,
           "pendingDeliveries": 0,
           "delivered": 0
-        }
+        },
+        "memoryCount": 0
       }
 order: 1000

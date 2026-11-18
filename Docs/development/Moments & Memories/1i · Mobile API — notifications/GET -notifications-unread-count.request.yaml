@@ -1,0 +1,16 @@
+$kind: http-request
+name: "GET /notifications/unread-count (bell dot)"
+description: |-
+  How many are unread. Home shows the red dot when unread > 0.
+url: "{{baseUrl}}/api/v1/notifications/unread-count"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('a number', () => pm.expect(pm.response.json().unread).to.be.a('number'));
+    language: text/javascript
+examples: ./.resources/GET -notifications-unread-count.resources/examples
+order: 1000

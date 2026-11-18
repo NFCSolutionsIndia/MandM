@@ -1,0 +1,20 @@
+$kind: http-request
+name: "GET /calendar?from=2026-03-01&to=2026-03-31 (month grid)"
+description: |-
+  Every date in one month, sorted by date, then type. The grid puts a dot or avatar on each day; tapping a day shows that day's items. today says which cell to ring. At most 366 days per request; to before from, a missing bound or a bad date is 400.
+url: "{{baseUrl}}/api/v1/calendar?from=2026-03-01&to=2026-03-31"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+queryParams:
+  from: "2026-03-01"
+  to: "2026-03-31"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const items = pm.response.json().items;
+      pm.test('sorted by date', () => { for (let i = 1; i < items.length; i++) pm.expect(items[i].date >= items[i-1].date).to.be.true; });
+    language: text/javascript
+examples: ./.resources/GET -calendar-month.resources/examples
+order: 1000

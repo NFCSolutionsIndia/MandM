@@ -36,3 +36,4 @@ variables:
   newUsername: aarav.k
   memberId: ""
   eventId: ""
+  notificationId: ""

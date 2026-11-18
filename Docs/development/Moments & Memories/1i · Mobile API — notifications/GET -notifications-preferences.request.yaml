@@ -1,0 +1,15 @@
+$kind: http-request
+name: "GET /notifications/preferences"
+description: |-
+  Quiet hours (null when off) and the per-type switches, defaults filled in. suppressible: false types (failed delivery, security, billing) cannot be switched off and ignore quiet hours.
+url: "{{baseUrl}}/api/v1/notifications/preferences"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+examples: ./.resources/GET -notifications-preferences.resources/examples
+order: 5000

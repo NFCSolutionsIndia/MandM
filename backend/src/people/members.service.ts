@@ -25,6 +25,9 @@ type Tx = Parameters<Parameters<DbService['tx']>[0]>[0];
 type MemberRow = {
   id: string;
   name: string;
+  nickname: string | null;
+  location: string | null;
+  memory_count: string | number;
   relationship: string | null;
   birthday: string | null;
   birthday_precision: string | null;
@@ -44,7 +47,10 @@ type MemberRow = {
 const KNOWN_TO_DAY = sql`COALESCE(m.birthday_precision, 'day') IN ('exact', 'day')`;
 
 const COLUMNS = sql`
-  m.id, m.name, m.relationship,
+  m.id, m.name, m.nickname, m.location, m.relationship,
+  (SELECT count(*) FROM memory_members mm
+     JOIN memories mem ON mem.id = mm.memory_id AND mem.deleted_at IS NULL
+    WHERE mm.member_id = m.id) AS memory_count,
   to_char(m.birthday, 'YYYY-MM-DD') AS birthday, m.birthday_precision,
   to_char(m.anniversary, 'YYYY-MM-DD') AS anniversary,
   m.phone, m.email::text AS email, m.notes, m.avatar_media_id,
@@ -79,7 +85,7 @@ export class MembersService {
     const where: SQL[] = [sql`m.owner_id = app_current_user()`, sql`m.merged_into_id IS NULL`];
     if (query.q) {
       const pattern = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      where.push(sql`m.name ILIKE ${pattern}`);
+      where.push(sql`(m.name ILIKE ${pattern} OR m.nickname ILIKE ${pattern})`);
     }
     if (query.cursor) {
       const [name, id] = decodeCursor(query.cursor, ['s', 's']);
@@ -191,9 +197,10 @@ export class MembersService {
 
         const created = await tx.execute<{ id: string }>(sql`
           INSERT INTO members
-            (id, owner_id, name, relationship, birthday, birthday_precision, anniversary,
-             phone, email, notes, avatar_media_id, deceased_at)
+            (id, owner_id, name, nickname, location, relationship, birthday,
+             birthday_precision, anniversary, phone, email, notes, avatar_media_id, deceased_at)
           VALUES (uuid_generate_v7(), app_current_user(), ${body.name},
+                  ${body.nickname ?? null}, ${body.location ?? null},
                   ${storedRelationship(body.relationship, body.relationshipLabel)},
                   ${body.birthday ?? null}, ${precision}, ${body.anniversary ?? null},
                   ${body.phone ?? null}, ${body.email ?? null}, ${body.notes ?? null},
@@ -241,6 +248,8 @@ export class MembersService {
 
         const sets: SQL[] = [];
         if (body.name !== undefined) sets.push(sql`name = ${body.name}`);
+        if (body.nickname !== undefined) sets.push(sql`nickname = ${body.nickname}`);
+        if (body.location !== undefined) sets.push(sql`location = ${body.location}`);
         if (body.relationship !== undefined) {
           sets.push(sql`relationship = ${storedRelationship(body.relationship, body.relationshipLabel)}`);
         }
@@ -343,7 +352,12 @@ export class MembersService {
     return {
       id: r.id,
       name: r.name,
+      nickname: r.nickname,
+      /** What the screens lead with: the nickname, or the name when there is none. */
+      displayName: r.nickname ?? r.name,
+      location: r.location,
       ...readRelationship(r.relationship),
+      memoryCount: Number(r.memory_count),
       birthday: r.birthday,
       birthdayPrecision: r.birthday_precision,
       anniversary: r.anniversary,

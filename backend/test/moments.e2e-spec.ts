@@ -252,7 +252,7 @@ describe('upcoming moments, end to end', () => {
   it('step 3: a new account with no data gets items: []', async () => {
     const fresh = await signUp('fresh@example.com');
     const res = await upcoming(fresh.token).expect(200);
-    expect(res.body).toEqual({ items: [] });
+    expect(res.body).toEqual({ items: [], counts: { next7Days: 0 } });
   });
 
   it('ties are broken by type, then title', async () => {

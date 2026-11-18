@@ -1,0 +1,109 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/search?q=dad&limit=5"
+  method: GET
+  headers:
+    Authorization: Bearer {{token}}
+response:
+  statusCode: 200
+  statusText: "OK"
+  headers:
+    Content-Type: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "q": "dad",
+        "people": {
+          "items": [
+            {
+              "id": "019a7b3c-0000-7000-8000-000000000102",
+              "name": "Mike Carter",
+              "nickname": "Dad",
+              "displayName": "Dad",
+              "relationship": "father",
+              "relationshipLabel": null,
+              "location": "Austin, TX",
+              "memoryCount": 18,
+              "avatarUrl": "https://…signed…",
+              "deceased": false
+            }
+          ],
+          "nextCursor": null
+        },
+        "memories": {
+          "items": [
+            {
+              "id": "019a7b3c-0000-7000-8000-000000000401",
+              "vaultId": "019a7b3c-0000-7000-8000-000000000001",
+              "title": "Dad’s 60th video",
+              "occurredAt": "2026-03-01T10:00:00.000Z",
+              "mediaKind": "video",
+              "thumbnailUrl": "https://…signed…"
+            },
+            {
+              "id": "019a7b3c-0000-7000-8000-000000000402",
+              "vaultId": "019a7b3c-0000-7000-8000-000000000001",
+              "title": "Voice for Dad",
+              "occurredAt": "2026-02-01T10:00:00.000Z",
+              "mediaKind": "audio",
+              "thumbnailUrl": "https://…signed…"
+            },
+            {
+              "id": "019a7b3c-0000-7000-8000-000000000403",
+              "vaultId": "019a7b3c-0000-7000-8000-000000000001",
+              "title": "Thanksgiving 2025",
+              "occurredAt": "2025-11-27T10:00:00.000Z",
+              "mediaKind": "video",
+              "thumbnailUrl": "https://…signed…"
+            }
+          ],
+          "nextCursor": "WyIyMDI1LTExLTI3VDEwOjAwOjAwLjAwMDAwMFoiLCIwMTlhN2IzYy0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDA0MDMiXQ"
+        },
+        "dates": {
+          "items": [
+            {
+              "type": "birthday",
+              "source": "person",
+              "id": "019a7b3c-0000-7000-8000-000000000102",
+              "title": "Dad's birthday",
+              "date": "2026-03-21",
+              "daysLeft": 6,
+              "turns": 60,
+              "recurrence": "yearly",
+              "capsuleState": null,
+              "person": {
+                "id": "019a7b3c-0000-7000-8000-000000000102",
+                "name": "Mike Carter",
+                "nickname": "Dad",
+                "displayName": "Dad",
+                "location": "Austin, TX",
+                "avatarUrl": "https://…signed…",
+                "deceased": false
+              }
+            },
+            {
+              "type": "capsule",
+              "source": "capsule",
+              "id": "019a7b3c-0000-7000-8000-000000000301",
+              "title": "For Dad",
+              "date": "2026-03-25",
+              "daysLeft": 10,
+              "turns": null,
+              "recurrence": "none",
+              "capsuleState": "sealed",
+              "person": {
+                "id": "019a7b3c-0000-7000-8000-000000000102",
+                "name": "Mike Carter",
+                "nickname": "Dad",
+                "displayName": "Dad",
+                "location": "Austin, TX",
+                "avatarUrl": "https://…signed…",
+                "deceased": false
+              }
+            }
+          ],
+          "nextCursor": null
+        }
+      }
+order: 1000
