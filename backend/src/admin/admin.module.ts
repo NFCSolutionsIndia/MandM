@@ -12,11 +12,18 @@ import { AdminActorMiddleware } from './admin.middleware.js';
 import { AppVersionsAdminController } from './app-versions.controller.js';
 import { DashboardController } from './dashboard.controller.js';
 import { DashboardService } from './dashboard.service.js';
+import { AdminUsersController } from './users.controller.js';
+import { AdminUsersService } from './users.service.js';
 
 @Module({
   imports: [MailModule, AppVersionModule],
-  controllers: [AdminAuthController, DashboardController, AppVersionsAdminController],
-  providers: [AdminAuthService, DashboardService],
+  controllers: [
+    AdminAuthController,
+    DashboardController,
+    AppVersionsAdminController,
+    AdminUsersController,
+  ],
+  providers: [AdminAuthService, DashboardService, AdminUsersService],
 })
 export class AdminModule implements NestModule {
   /**

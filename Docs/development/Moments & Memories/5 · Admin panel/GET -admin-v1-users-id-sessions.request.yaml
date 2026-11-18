@@ -1,0 +1,19 @@
+$kind: http-request
+name: GET /admin/v1/users/:id/sessions
+description: |-
+  BE-08. The user's sign-ins, newest first: userAgent (device), createdAt, lastActiveAt, expiresAt (refresh expiry or 7 days idle, whichever is first), revoked, revokedAt, active.
+
+  No token material is ever returned. Unknown user → 404. Writes an audit row (admin.user.sessions_viewed).
+url: "{{baseUrl}}/api/v1/admin/v1/users/{{adminUserId}}/sessions"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('has items', () => pm.expect(b.items).to.be.an('array'));
+      (b.items || []).forEach(s => console.log(s.active ? 'ACTIVE ' : 'ended  ', s.userAgent, s.createdAt));
+    language: text/javascript
+order: 9200

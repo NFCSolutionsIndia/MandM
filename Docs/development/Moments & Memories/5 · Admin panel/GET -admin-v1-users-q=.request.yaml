@@ -1,0 +1,30 @@
+$kind: http-request
+name: GET /admin/v1/users?q=
+description: |-
+  BE-08. Search users by email, phone or username (part of any of them, case-insensitive). Phone matches with or without spaces, dashes or +.
+
+  Newest accounts first. Each item: id, username, email, phone, channels (email / phone / passkey: the verified ones), plan, createdAt, lastActiveAt, deletedAt.
+  More results → nextCursor; send it back as ?cursor=. No q → every user.
+
+  Saves the first result's id as {{adminUserId}} for the next two requests. Every call writes an audit row (admin.users.searched).
+url: "{{baseUrl}}/api/v1/admin/v1/users?q={{userQuery}}&limit=25"
+method: GET
+headers:
+  Authorization: Bearer {{adminToken}}
+queryParams:
+  q: "{{userQuery}}"
+  limit: "25"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('has items', () => pm.expect(b.items).to.be.an('array'));
+      if (b.items && b.items.length) {
+        pm.collectionVariables.set('adminUserId', b.items[0].id);
+        console.log('adminUserId =', b.items[0].id, b.items[0].username);
+      } else {
+        console.log('No user matched', pm.collectionVariables.get('userQuery'));
+      }
+    language: text/javascript
+order: 9100

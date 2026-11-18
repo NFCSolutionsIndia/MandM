@@ -1801,6 +1801,9 @@ asserting the version nibble on every id those functions create.
 | `GET  /api/v1/vaults` · `POST /api/v1/vaults` | the first product endpoints |
 | `GET  /api/v1/app-version/:platform?current=x.y.z` | public, `ios` or `android`. `updateAvailable` (current < latest) and `forceUpdate` (current < minimum), compared numerically. Cached 5 minutes |
 | `GET  /api/v1/admin/v1/app-versions` · `PUT …/:platform` | console only. A PUT is audit-logged with old and new values; 422 for a non-x.y.z version or a minimum above the latest |
+| `GET  /api/v1/admin/v1/users?q=&cursor=&limit=` | console only. Search by email, phone or username; newest first. Returns channels, plan, created and last-active dates. Audit-logged |
+| `GET  /api/v1/admin/v1/users/:id/sessions?cursor=` | console only. Device (user agent), created, last active, expiry, revoked. No token material. Audit-logged; 404 for an unknown user |
+| `POST /api/v1/admin/v1/users/:id/sessions/revoke-all` | console only. Ends every session; the next mobile request is 401. Returns `{ userId, revoked }`. Audit-logged |
 | `GET  /health` · `/health/ready` | public, and outside the version prefix |
 
 In development the sign-in code is written to the log. `MailService` **throws

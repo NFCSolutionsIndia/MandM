@@ -1,0 +1,12 @@
+$kind: http-request
+name: GET /admin/v1/users — with a CUSTOMER token (expect 401)
+description: A mobile user's token never reaches the console.
+url: "{{baseUrl}}/api/v1/admin/v1/users"
+method: GET
+headers:
+  Authorization: Bearer {{token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 9400

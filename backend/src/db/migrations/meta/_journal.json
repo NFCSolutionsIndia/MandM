@@ -169,6 +169,13 @@
       "when": 1794925707806,
       "tag": "0023_member_nickname_location",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794985873987,
+      "tag": "0024_admin_user_sessions",
+      "breakpoints": true
     }
   ]
 }

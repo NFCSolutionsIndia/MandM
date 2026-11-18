@@ -1,0 +1,21 @@
+$kind: http-request
+name: POST /admin/v1/users/:id/sessions/revoke-all
+description: |-
+  BE-08. Signs the user out of every device. No body.
+
+  Returns { userId, revoked } where revoked is how many live sessions were ended (0 is fine). The user's next mobile request with the old token → 401; refresh → 401 too. Writes an audit row (admin.user.sessions_revoked).
+
+  To check: run GET /auth/me in the Mobile folder with that user's {{token}} → 401.
+url: "{{baseUrl}}/api/v1/admin/v1/users/{{adminUserId}}/sessions/revoke-all"
+method: POST
+headers:
+  Authorization: Bearer {{adminToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const b = pm.response.json();
+      pm.test('reports a count', () => pm.expect(b.revoked).to.be.a('number'));
+      console.log('Revoked', b.revoked, 'session(s) for', b.userId);
+    language: text/javascript
+order: 9300
