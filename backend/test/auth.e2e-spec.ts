@@ -640,7 +640,9 @@ describe('authentication, end to end', () => {
   });
 
   it('uses only the latest request\'s details when a code is re-requested', async () => {
-    const email = 'esha@example.com';
+    // Not esha@: an earlier test already made that account, and an existing
+    // account's name is (rightly) never changed by a code request.
+    const email = 'esha.patel@example.com';
     await request(app.getHttpServer())
       .post('/api/v1/auth/request-code')
       .send({ email, fullName: 'Typo Nmae' })
