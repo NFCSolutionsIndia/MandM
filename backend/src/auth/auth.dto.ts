@@ -22,8 +22,38 @@ const emailField = z
   .email('must be a valid email address')
   .max(320, 'must be at most 320 characters');
 
+/**
+ * Mobile number in E.164: `+`, country code, subscriber number, 8–15 digits
+ * in all. Spaces, dashes, dots and brackets are removed first, so
+ * `+1 (512) 555-0134` is stored as `+15125550134`.
+ */
+const phoneField = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s\-().]/g, ''))
+  .pipe(
+    z
+      .string()
+      .regex(
+        /^\+[1-9]\d{7,14}$/,
+        'must be in international format, e.g. +15125550134',
+      ),
+  );
+
 export const requestCodeSchema = z.object({
   email: emailField,
+
+  /**
+   * Optional sign-up details. Used only if verifying this code CREATES the
+   * account. An existing account's profile is never changed by them.
+   */
+  fullName: z
+    .string()
+    .trim()
+    .min(1, 'must not be empty')
+    .max(200, 'must be at most 200 characters')
+    .optional(),
+  mobileNumber: phoneField.optional(),
 });
 
 export const verifyCodeSchema = z.object({

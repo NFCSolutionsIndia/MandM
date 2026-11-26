@@ -1,0 +1,37 @@
+{
+  // Breakpoint debugging for the NestJS API.
+  // Ctrl+Shift+D -> "Backend: Debug API" -> F5.
+  // Stop any `npm run start:dev` first, or port 3000 is already taken.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend: Debug API",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      // js-debug auto-attaches to the Node process `nest start --watch` spawns,
+      // and re-attaches after every rebuild on save.
+      "autoAttachChildProcesses": true,
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/backend/dist/**/*.js"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/backend/**",
+        "!**/node_modules/**"
+      ],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    },
+    {
+      "name": "Backend: Attach (port 9229)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/backend/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    }
+  ]
+}

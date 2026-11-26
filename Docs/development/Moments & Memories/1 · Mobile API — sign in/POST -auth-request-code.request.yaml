@@ -4,6 +4,8 @@ description: |-
   Always 202, for any address.
 
   That is the whole point: a 404 for unknown addresses would turn this into a way to ask the server whether somebody has an account here. Creating an account and signing in are the same request — there is no separate sign-up.
+
+  Optional `fullName` (1–200 characters) and `mobileNumber` (international format, e.g. +15125550134; spaces, dashes and brackets are removed) are used only when verifying this code CREATES the account. They never change an existing account. The phone is stored unverified.
 url: "{{baseUrl}}/api/v1/auth/request-code"
 method: POST
 headers:
@@ -12,7 +14,9 @@ body:
   type: text
   content: |-
     {
-      "email": "{{email}}"
+      "email": "{{email}}",
+      "fullName": "Emma Carter",
+      "mobileNumber": "+15125550134"
     }
 scripts:
   - type: afterResponse

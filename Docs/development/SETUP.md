@@ -1780,7 +1780,7 @@ asserting the version nibble on every id those functions create.
 
 | | |
 |---|---|
-| `POST /api/v1/auth/request-code` | 202, always |
+| `POST /api/v1/auth/request-code` | `{ email, fullName?, mobileNumber? }` → 202, always. `fullName` and `mobileNumber` (E.164) are applied only when verify creates the account, never to an existing one. The phone is stored unverified |
 | `POST /api/v1/auth/verify` | → `{ accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, isNewAccount, user: { id, username, name } }` |
 | `POST /api/v1/auth/refresh` | public. `{ refreshToken }` → a new pair, same shape without `isNewAccount`. 401 when expired, idle 7 days, revoked or reused — the client signs out |
 | `GET  /api/v1/auth/me` | `WHERE id = app_current_user()` — no input can make it return somebody else |

@@ -83,7 +83,14 @@ export class AuthService {
    * sign-in are the same flow here, there is nothing to disclose anyway — an
    * unknown address simply gets an account when the code is redeemed.
    */
-  async requestCode(email: string, ipHash: string | null): Promise<void> {
+  async requestCode(
+    email: string,
+    ipHash: string | null,
+    signUp: { name: string | null; phone: string | null } = {
+      name: null,
+      phone: null,
+    },
+  ): Promise<void> {
     const recent = await this.db.raw.execute<{ count: string }>(
       sql`SELECT app_recent_email_code_count(${email}, 60) AS count`,
     );
@@ -100,7 +107,8 @@ export class AuthService {
     await this.db.raw.execute(
       sql`SELECT app_issue_email_code(
             ${email}, ${hashToken(code)}, ${ipHash},
-            ${AuthService.CODE_TTL_SECONDS})`,
+            ${AuthService.CODE_TTL_SECONDS},
+            ${signUp.name}, ${signUp.phone})`,
     );
 
     await this.mail.sendSignInCode(email, code, AuthService.CODE_TTL_SECONDS);

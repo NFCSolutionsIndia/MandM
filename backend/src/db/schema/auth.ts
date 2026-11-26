@@ -53,6 +53,17 @@ export const emailOtps = pgTable(
     /** Hashed, like everywhere else. For abuse analysis, not for location. */
     ipHash: varchar('ip_hash', { length: 64 }),
 
+    /**
+     * Sign-up details sent with the code request, held until the code is
+     * redeemed, because the account is only created then.
+     *
+     * Used ONLY when redemption creates a new account. An existing account's
+     * profile is never changed by them: anyone can type someone else's email
+     * into the request form. Cleared once the code is redeemed.
+     */
+    name: varchar('name', { length: 200 }),
+    phone: varchar('phone', { length: 32 }),
+
     expiresAt: utcTimestamp('expires_at').notNull(),
 
     /** Set on use. A redeemed code is spent, not deleted — see the sweep. */

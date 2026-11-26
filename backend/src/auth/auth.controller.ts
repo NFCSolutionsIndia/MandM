@@ -50,7 +50,10 @@ export class AuthController {
     @Body() body: RequestCodeDto,
     @Req() req: FastifyRequest,
   ): Promise<{ status: string }> {
-    await this.auth.requestCode(body.email, this.ipHash(req));
+    await this.auth.requestCode(body.email, this.ipHash(req), {
+      name: body.fullName ?? null,
+      phone: body.mobileNumber ?? null,
+    });
 
     return {
       status: 'If that address can receive mail, a code is on its way.',
@@ -59,8 +62,7 @@ export class AuthController {
 
   /**
    * Redeem a code and open a session: an access token and a refresh token.
-   *
-   * One 401 for every failure: wrong code, expired code, too many attempts, no
+   *One 401 for every failure: wrong code, expired code, too many attempts, no
    * code at all. Distinguishing them would tell an attacker which part of the
    * guess was right.
    */

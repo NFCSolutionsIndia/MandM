@@ -176,6 +176,13 @@
       "when": 1794985873987,
       "tag": "0024_admin_user_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795688352085,
+      "tag": "0025_signup_name_phone",
+      "breakpoints": true
     }
   ]
 }

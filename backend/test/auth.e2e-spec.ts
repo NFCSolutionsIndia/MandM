@@ -568,6 +568,108 @@ describe('authentication, end to end', () => {
     expect(res.body.username).toBe('userab');
   });
 
+  // ── sign-up details: fullName and mobileNumber ────────────────────────────
+
+  /** Reads what is stored for a user, bypassing the API. */
+  async function userRow(email: string) {
+    const { rows } = await harness.ownerPool.query<{
+      name: string;
+      phone: string | null;
+      phone_verified_at: Date | null;
+    }>(
+      `SELECT name, phone, phone_verified_at FROM users WHERE email = $1`,
+      [email],
+    );
+    return rows[0];
+  }
+
+  it('creates the account with the full name and mobile number sent with the code request', async () => {
+    const email = 'chitra@example.com';
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({
+        email,
+        fullName: '  Chitra Rao ',
+        mobileNumber: '+1 (512) 555-0134',
+      })
+      .expect(202);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/verify')
+      .send({ email, code: await codeFor(email) })
+      .expect(200);
+
+    expect(res.body.isNewAccount).toBe(true);
+    expect(res.body.user.name).toBe('Chitra Rao');
+    // The handle still comes from the email, not the name.
+    expect(res.body.user.username).toBe('chitra');
+
+    const row = await userRow(email);
+    expect(row.phone).toBe('+15125550134');
+    // Only the email was proven.
+    expect(row.phone_verified_at).toBeNull();
+
+    // Personal data does not linger on the spent code.
+    const { rows } = await harness.ownerPool.query(
+      `SELECT name, phone FROM email_otps WHERE email = $1`,
+      [email],
+    );
+    expect(rows.every((r) => r.name === null && r.phone === null)).toBe(true);
+  });
+
+  it('never changes an existing account from the code request', async () => {
+    const email = 'dev@example.com';
+    await signIn(email);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({ email, fullName: 'Someone Else', mobileNumber: '+15550000000' })
+      .expect(202);
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/verify')
+      .send({ email, code: await codeFor(email) })
+      .expect(200);
+
+    expect(res.body.isNewAccount).toBe(false);
+    expect(res.body.user.name).toBe('dev');
+    expect((await userRow(email)).phone).toBeNull();
+  });
+
+  it('uses only the latest request\'s details when a code is re-requested', async () => {
+    const email = 'esha@example.com';
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({ email, fullName: 'Typo Nmae' })
+      .expect(202);
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({ email, fullName: 'Esha Patel' })
+      .expect(202);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/verify')
+      .send({ email, code: await codeFor(email) })
+      .expect(200);
+
+    expect(res.body.user.name).toBe('Esha Patel');
+    expect((await userRow(email)).phone).toBeNull();
+  });
+
+  it.each([
+    ['mobileNumber', { mobileNumber: '5125550134' }],
+    ['mobileNumber', { mobileNumber: '+12' }],
+    ['mobileNumber', { mobileNumber: '+1 512 abc 0134' }],
+    ['fullName', { fullName: '   ' }],
+    ['fullName', { fullName: 'x'.repeat(201) }],
+  ])('rejects an invalid %s', async (field, extra) => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/request-code')
+      .send({ email: 'invalid-details@example.com', ...extra })
+      .expect(400);
+
+    expect(res.body.errors[0].field).toBe(field);
+  });
+
   it('leaves the health endpoints outside the versioned prefix', async () => {
     await request(app.getHttpServer()).get('/health').expect(200);
 
