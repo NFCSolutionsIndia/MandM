@@ -1780,7 +1780,7 @@ asserting the version nibble on every id those functions create.
 
 | | |
 |---|---|
-| `POST /api/v1/auth/request-code` | `{ email, fullName?, countryCode?, mobileNumber? }` → 202, always. `countryCode` is + and 1–3 digits (`+91`), `mobileNumber` exactly 10 digits; both or neither, stored together as `+919876543215`. Applied only when verify creates the account, never to an existing one. The phone is stored unverified |
+| `POST /api/v1/auth/request-code` | `{ email, fullName?, mobileNumber? }` → 202, always. `mobileNumber` is + country code and exactly 10 digits (`+919876543215`; spaces and dashes removed). Applied only when verify creates the account, never to an existing one. The phone is stored unverified |
 | `POST /api/v1/auth/verify` | → `{ accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, isNewAccount, user: { id, username, name } }` |
 | `POST /api/v1/auth/refresh` | public. `{ refreshToken }` → a new pair, same shape without `isNewAccount`. 401 when expired, idle 7 days, revoked or reused — the client signs out |
 | `GET  /api/v1/auth/me` | `WHERE id = app_current_user()` — no input can make it return somebody else |

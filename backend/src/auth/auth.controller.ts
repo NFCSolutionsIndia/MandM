@@ -18,7 +18,6 @@ import { ActorContext } from '../db/actor-context.js';
 import { DbService } from '../db/db.service.js';
 import { Public } from './auth.guard.js';
 import {
-  fullPhone,
   refreshSchema,
   requestCodeSchema,
   verifyCodeSchema,
@@ -53,7 +52,7 @@ export class AuthController {
   ): Promise<{ status: string }> {
     await this.auth.requestCode(body.email, this.ipHash(req), {
       name: body.fullName ?? null,
-      phone: fullPhone(body),
+      phone: body.mobileNumber ?? null,
     });
 
     return {

@@ -22,64 +22,56 @@ const emailField = z
   .email('must be a valid email address')
   .max(320, 'must be at most 320 characters');
 
-/** `+` and a 1–3 digit country code: `+91`, `+1`, `+971`. */
-const countryCodeField = z
-  .string()
-  .trim()
-  .regex(/^\+[1-9]\d{0,2}$/, 'must be + and 1–3 digits, e.g. +91');
+/**
+ * The 2-digit ITU country codes. Country codes are prefix-free, so the first
+ * digits alone say how long the code is: `1` and `7` are one digit, these are
+ * two, everything else is three. That makes "exactly 10 digits after the
+ * code" exact. Without it, `+91987654321` (nine digits) would pass as `+9`
+ * and ten digits.
+ */
+const TWO_DIGIT_COUNTRY_CODES = new Set([
+  '20', '27', '30', '31', '32', '33', '34', '36', '39', '40', '41', '43', '44',
+  '45', '46', '47', '48', '49', '51', '52', '53', '54', '55', '56', '57', '58',
+  '60', '61', '62', '63', '64', '65', '66', '81', '82', '84', '86', '90', '91',
+  '92', '93', '94', '95', '98',
+]); // prettier-ignore
+
+function countryCodeLength(digits: string): number {
+  if (digits[0] === '1' || digits[0] === '7') return 1;
+  return TWO_DIGIT_COUNTRY_CODES.has(digits.slice(0, 2)) ? 2 : 3;
+}
 
 /**
- * Exactly 10 digits, without the country code. Spaces and dashes are removed
- * first, so `98765 43215` and `98765-43215` are accepted.
+ * One string: `+`, the country code, then exactly 10 digits:
+ * `+919876543215`, `+15125550134`, `+447911123456`. Spaces and dashes are
+ * removed first, so `+91 98765 43215` is stored as `+919876543215`.
  */
 const mobileNumberField = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s-]/g, ''))
-  .pipe(z.string().regex(/^\d{10}$/, 'must be exactly 10 digits'));
+  .refine((v) => {
+    const m = /^\+([1-9]\d+)$/.exec(v);
+    if (!m) return false;
+    return m[1].length - countryCodeLength(m[1]) === 10;
+  }, 'must be + country code and exactly 10 digits, e.g. +919876543215');
 
-export const requestCodeSchema = z
-  .object({
-    email: emailField,
+export const requestCodeSchema = z.object({
+  email: emailField,
 
-    /**
-     * Optional sign-up details. Used only if verifying this code CREATES the
-     * account. An existing account's profile is never changed by them.
-     */
-    fullName: z
-      .string()
-      .trim()
-      .min(1, 'must not be empty')
-      .max(200, 'must be at most 200 characters')
-      .optional(),
+  /**
+   * Optional sign-up details. Used only if verifying this code CREATES the
+   * account. An existing account's profile is never changed by them.
+   */
+  fullName: z
+    .string()
+    .trim()
+    .min(1, 'must not be empty')
+    .max(200, 'must be at most 200 characters')
+    .optional(),
 
-    /** Sent together or not at all. Stored as one number: `+919876543215`. */
-    countryCode: countryCodeField.optional(),
-    mobileNumber: mobileNumberField.optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.countryCode && !v.mobileNumber) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['mobileNumber'],
-        message: 'is required when countryCode is sent',
-      });
-    }
-    if (v.mobileNumber && !v.countryCode) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['countryCode'],
-        message: 'is required when mobileNumber is sent, e.g. +91',
-      });
-    }
-  });
-
-/** The stored form: country code + number, e.g. `+919876543215`, or null. */
-export function fullPhone(dto: RequestCodeDto): string | null {
-  return dto.countryCode && dto.mobileNumber
-    ? `${dto.countryCode}${dto.mobileNumber}`
-    : null;
-}
+  mobileNumber: mobileNumberField.optional(),
+});
 
 export const verifyCodeSchema = z.object({
   email: emailField,
