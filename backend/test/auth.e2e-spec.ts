@@ -590,7 +590,8 @@ describe('authentication, end to end', () => {
       .send({
         email,
         fullName: '  Chitra Rao ',
-        mobileNumber: '+1 (512) 555-0134',
+        countryCode: '+91',
+        mobileNumber: '98765 43215',
       })
       .expect(202);
 
@@ -605,7 +606,7 @@ describe('authentication, end to end', () => {
     expect(res.body.user.username).toBe('chitra');
 
     const row = await userRow(email);
-    expect(row.phone).toBe('+15125550134');
+    expect(row.phone).toBe('+919876543215');
     // Only the email was proven.
     expect(row.phone_verified_at).toBeNull();
 
@@ -623,7 +624,12 @@ describe('authentication, end to end', () => {
 
     await request(app.getHttpServer())
       .post('/api/v1/auth/request-code')
-      .send({ email, fullName: 'Someone Else', mobileNumber: '+15550000000' })
+      .send({
+        email,
+        fullName: 'Someone Else',
+        countryCode: '+1',
+        mobileNumber: '5125550134',
+      })
       .expect(202);
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/verify')
@@ -656,9 +662,18 @@ describe('authentication, end to end', () => {
   });
 
   it.each([
-    ['mobileNumber', { mobileNumber: '5125550134' }],
-    ['mobileNumber', { mobileNumber: '+12' }],
-    ['mobileNumber', { mobileNumber: '+1 512 abc 0134' }],
+    // Exactly 10 digits, no more, no fewer, nothing else.
+    ['mobileNumber', { countryCode: '+91', mobileNumber: '987654321' }],
+    ['mobileNumber', { countryCode: '+91', mobileNumber: '98765432155' }],
+    ['mobileNumber', { countryCode: '+91', mobileNumber: '+919876543215' }],
+    ['mobileNumber', { countryCode: '+91', mobileNumber: '98765abc15' }],
+    // A + and 1–3 digits.
+    ['countryCode', { countryCode: '91', mobileNumber: '9876543215' }],
+    ['countryCode', { countryCode: '+9191', mobileNumber: '9876543215' }],
+    ['countryCode', { countryCode: '+0', mobileNumber: '9876543215' }],
+    // Both or neither.
+    ['countryCode', { mobileNumber: '9876543215' }],
+    ['mobileNumber', { countryCode: '+91' }],
     ['fullName', { fullName: '   ' }],
     ['fullName', { fullName: 'x'.repeat(201) }],
   ])('rejects an invalid %s', async (field, extra) => {

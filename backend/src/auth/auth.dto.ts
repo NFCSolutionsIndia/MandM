@@ -22,39 +22,64 @@ const emailField = z
   .email('must be a valid email address')
   .max(320, 'must be at most 320 characters');
 
-/**
- * Mobile number in E.164: `+`, country code, subscriber number, 8–15 digits
- * in all. Spaces, dashes, dots and brackets are removed first, so
- * `+1 (512) 555-0134` is stored as `+15125550134`.
- */
-const phoneField = z
+/** `+` and a 1–3 digit country code: `+91`, `+1`, `+971`. */
+const countryCodeField = z
   .string()
   .trim()
-  .transform((v) => v.replace(/[\s\-().]/g, ''))
-  .pipe(
-    z
+  .regex(/^\+[1-9]\d{0,2}$/, 'must be + and 1–3 digits, e.g. +91');
+
+/**
+ * Exactly 10 digits, without the country code. Spaces and dashes are removed
+ * first, so `98765 43215` and `98765-43215` are accepted.
+ */
+const mobileNumberField = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s-]/g, ''))
+  .pipe(z.string().regex(/^\d{10}$/, 'must be exactly 10 digits'));
+
+export const requestCodeSchema = z
+  .object({
+    email: emailField,
+
+    /**
+     * Optional sign-up details. Used only if verifying this code CREATES the
+     * account. An existing account's profile is never changed by them.
+     */
+    fullName: z
       .string()
-      .regex(
-        /^\+[1-9]\d{7,14}$/,
-        'must be in international format, e.g. +15125550134',
-      ),
-  );
+      .trim()
+      .min(1, 'must not be empty')
+      .max(200, 'must be at most 200 characters')
+      .optional(),
 
-export const requestCodeSchema = z.object({
-  email: emailField,
+    /** Sent together or not at all. Stored as one number: `+919876543215`. */
+    countryCode: countryCodeField.optional(),
+    mobileNumber: mobileNumberField.optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.countryCode && !v.mobileNumber) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mobileNumber'],
+        message: 'is required when countryCode is sent',
+      });
+    }
+    if (v.mobileNumber && !v.countryCode) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['countryCode'],
+        message: 'is required when mobileNumber is sent, e.g. +91',
+      });
+    }
+  });
 
-  /**
-   * Optional sign-up details. Used only if verifying this code CREATES the
-   * account. An existing account's profile is never changed by them.
-   */
-  fullName: z
-    .string()
-    .trim()
-    .min(1, 'must not be empty')
-    .max(200, 'must be at most 200 characters')
-    .optional(),
-  mobileNumber: phoneField.optional(),
-});
+/** The stored form: country code + number, e.g. `+919876543215`, or null. */
+export function fullPhone(dto: RequestCodeDto): string | null {
+  return dto.countryCode && dto.mobileNumber
+    ? `${dto.countryCode}${dto.mobileNumber}`
+    : null;
+}
 
 export const verifyCodeSchema = z.object({
   email: emailField,
